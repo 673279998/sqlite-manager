@@ -214,34 +214,262 @@ var EditRowModal = (function(_super) {
             var value = this.rowData[col.name];
             var isJsonField = typeof value === "string" &&
                 (value.trim().startsWith("[") || value.trim().startsWith("{"));
+            // Also detect JSON-like fields when value is null (new row) based on column name hints
+            var isJsonLikely = !isJsonField && (value === null || value === undefined || value === "") && (
+                col.name.toLowerCase().includes("原料") ||
+                col.name.toLowerCase().includes("配方") ||
+                col.name.toLowerCase().includes("配料") ||
+                col.name.toLowerCase().includes("成分") ||
+                col.name.toLowerCase().includes("json") ||
+                col.name.toLowerCase().includes("list") ||
+                col.name.toLowerCase().includes("items") ||
+                col.name.toLowerCase().includes("array") ||
+                (col.type && col.type.toUpperCase().includes("JSON"))
+            );
 
-            if (isJsonField) {
-                var textarea_1 = fieldDiv.createEl("textarea", {
-                    cls: "sqlite-manager-form-input json-input",
-                    attr: { placeholder: "输入JSON格式的" + col.name, rows: "6", spellcheck: "false" }
-                });
-                textarea_1.value = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-                inputElements[col.name] = textarea_1;
+            if (isJsonField || isJsonLikely) {
+                // Parse the JSON value
+                var parsedJson = null;
+                try { parsedJson = JSON.parse(typeof value === "string" ? value : JSON.stringify(value)); } catch (e) { parsedJson = null; }
+                
+                // If value is null/empty but field is likely JSON, initialize as empty array
+                if (!parsedJson && isJsonLikely) {
+                    parsedJson = [];
+                }
+                
+                // Check if it's a table-like JSON (array of objects)
+                var isTableLike = parsedJson && Array.isArray(parsedJson) && parsedJson.length > 0 && typeof parsedJson[0] === "object" && parsedJson[0] !== null;
+                // Also check if it's an empty array (could become table-like)
+                var isEmptyArray = parsedJson && Array.isArray(parsedJson) && parsedJson.length === 0;
+                
+                if (isTableLike || isEmptyArray) {
+                    // === TABLE EDITOR for JSON arrays of objects ===
+                    var jsonTableData_1 = parsedJson.slice(); // working copy of the array
+                    // Collect all unique keys from all objects
+                    var allKeys_1 = [];
+                    var keySet_1 = {};
+                    for (var _j = 0; _j < jsonTableData_1.length; _j++) {
+                        var obj = jsonTableData_1[_j];
+                        if (obj && typeof obj === "object") {
+                            for (var k in obj) {
+                                if (obj.hasOwnProperty(k) && !keySet_1[k]) {
+                                    keySet_1[k] = true;
+                                    allKeys_1.push(k);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Hidden input to store the final JSON value (used by save logic)
+                    var hiddenInput = fieldDiv.createEl("input", {
+                        cls: "sqlite-manager-json-hidden",
+                        attr: { type: "hidden" }
+                    });
+                    hiddenInput.value = JSON.stringify(jsonTableData_1);
+                    inputElements[col.name] = hiddenInput;
+                    
+                    // Table container
+                    var tableContainer_1 = fieldDiv.createDiv({ cls: "sqlite-manager-json-editor" });
+                    
+                    function renderJsonTable_1() {
+                        tableContainer_1.empty();
+                        
+                        // Re-collect keys in case new rows added new keys
+                        allKeys_1.length = 0;
+                        keySet_1 = {};
+                        for (var j = 0; j < jsonTableData_1.length; j++) {
+                            var obj = jsonTableData_1[j];
+                            if (obj && typeof obj === "object") {
+                                for (var k in obj) {
+                                    if (obj.hasOwnProperty(k) && !keySet_1[k]) {
+                                        keySet_1[k] = true;
+                                        allKeys_1.push(k);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (allKeys_1.length === 0) {
+                            allKeys_1.push("属性1");
+                            keySet_1["属性1"] = true;
+                        }
+                        
+                        var jTable = tableContainer_1.createEl("table", { cls: "sqlite-manager-edit-json-table" });
+                        
+                        // Header row
+                        var jThead = jTable.createEl("thead");
+                        var hRow = jThead.createEl("tr");
+                        hRow.createEl("th", { text: "#", cls: "sqlite-manager-edit-json-row-num" });
+                        for (var ki = 0; ki < allKeys_1.length; ki++) {
+                            hRow.createEl("th", { text: allKeys_1[ki] });
+                        }
+                        hRow.createEl("th", { text: "操作", cls: "sqlite-manager-edit-json-actions" });
+                        
+                        // Body rows
+                        var jTbody = jTable.createEl("tbody");
+                        for (var ri = 0; ri < jsonTableData_1.length; ri++) {
+                            var rowData = jsonTableData_1[ri] || {};
+                            var bRow = jTbody.createEl("tr");
+                            bRow.createEl("td", { text: String(ri + 1), cls: "sqlite-manager-edit-json-row-num" });
+                            
+                            for (var ki2 = 0; ki2 < allKeys_1.length; ki2++) {
+                                var td = bRow.createEl("td");
+                                var cellInput = td.createEl("input", {
+                                    cls: "sqlite-manager-edit-json-cell",
+                                    attr: { type: "text", spellcheck: "false", placeholder: allKeys_1[ki2] }
+                                });
+                                cellInput.value = rowData[allKeys_1[ki2]] !== undefined && rowData[allKeys_1[ki2]] !== null ? String(rowData[allKeys_1[ki2]]) : "";
+                                // Store row index and key on the element for retrieval
+                                cellInput.dataset.rowIdx = String(ri);
+                                cellInput.dataset.key = allKeys_1[ki2];
+                                cellInput.addEventListener("input", function() {
+                                    var rIdx = parseInt(this.dataset.rowIdx);
+                                    var rKey = this.dataset.key;
+                                    if (!jsonTableData_1[rIdx]) jsonTableData_1[rIdx] = {};
+                                    jsonTableData_1[rIdx][rKey] = this.value;
+                                    hiddenInput.value = JSON.stringify(jsonTableData_1);
+                                });
+                            }
+                            
+                            // Delete row button
+                            var actTd = bRow.createEl("td", { cls: "sqlite-manager-edit-json-actions" });
+                            var delRowBtn = actTd.createEl("button", { text: "✕", cls: "sqlite-manager-edit-json-del-row" });
+                            delRowBtn.dataset.rowIdx = String(ri);
+                            delRowBtn.addEventListener("click", function() {
+                                var delIdx = parseInt(this.dataset.rowIdx);
+                                jsonTableData_1.splice(delIdx, 1);
+                                hiddenInput.value = JSON.stringify(jsonTableData_1);
+                                renderJsonTable_1();
+                            });
+                        }
+                        
+                        // Row count
+                        tableContainer_1.createDiv({ cls: "sqlite-manager-json-editor-count", text: "共 " + jsonTableData_1.length + " 条记录" });
+                    }
+                    
+                    renderJsonTable_1();
+                    
+                    // Button group for table editor
+                    var jTableBtnGroup = fieldDiv.createDiv({ cls: "sqlite-manager-form-btn-group" });
+                    var addRowBtn = jTableBtnGroup.createEl("button", { text: "➕ 添加行", cls: "mod-muted" });
+                    addRowBtn.addEventListener("click", function() {
+                        var newRow = {};
+                        for (var ki3 = 0; ki3 < allKeys_1.length; ki3++) {
+                            newRow[allKeys_1[ki3]] = "";
+                        }
+                        jsonTableData_1.push(newRow);
+                        hiddenInput.value = JSON.stringify(jsonTableData_1);
+                        renderJsonTable_1();
+                    });
+                    
+                    // Add column button
+                    var addColBtn = jTableBtnGroup.createEl("button", { text: "➕ 添加列", cls: "mod-muted" });
+                    addColBtn.addEventListener("click", function() {
+                        var newKeyName = "新属性" + (allKeys_1.length + 1);
+                        var counter = allKeys_1.length + 1;
+                        while (keySet_1[newKeyName]) {
+                            counter++;
+                            newKeyName = "新属性" + counter;
+                        }
+                        allKeys_1.push(newKeyName);
+                        keySet_1[newKeyName] = true;
+                        // Add the new key to all existing rows
+                        for (var ri2 = 0; ri2 < jsonTableData_1.length; ri2++) {
+                            if (!jsonTableData_1[ri2]) jsonTableData_1[ri2] = {};
+                            jsonTableData_1[ri2][newKeyName] = "";
+                        }
+                        hiddenInput.value = JSON.stringify(jsonTableData_1);
+                        renderJsonTable_1();
+                    });
+                    
+                    // Switch to raw JSON editor
+                    var rawBtn = jTableBtnGroup.createEl("button", { text: "📝 原始JSON", cls: "mod-muted" });
+                    rawBtn.addEventListener("click", function() {
+                        tableContainer_1.empty();
+                        jTableBtnGroup.empty();
+                        var rawTextarea = tableContainer_1.createEl("textarea", {
+                            cls: "sqlite-manager-form-input json-input",
+                            attr: { rows: "8", spellcheck: "false" }
+                        });
+                        rawTextarea.value = JSON.stringify(jsonTableData_1, null, 2);
+                        inputElements[col.name] = rawTextarea;
+                        
+                        var rawBtnGroup2 = jTableBtnGroup.createDiv({ cls: "sqlite-manager-form-btn-group" });
+                        var formatBtn2 = rawBtnGroup2.createEl("button", { text: "格式化JSON", cls: "mod-muted" });
+                        formatBtn2.addEventListener("click", function() {
+                            try {
+                                var p = JSON.parse(rawTextarea.value);
+                                rawTextarea.value = JSON.stringify(p, null, 2);
+                            } catch (e2) { new obsidian.Notice("JSON格式不正确"); }
+                        });
+                        var backBtn = rawBtnGroup2.createEl("button", { text: "📊 表格编辑", cls: "mod-muted" });
+                        backBtn.addEventListener("click", function() {
+                            try {
+                                var reparsed = JSON.parse(rawTextarea.value);
+                                if (Array.isArray(reparsed)) {
+                                    jsonTableData_1.length = 0;
+                                    for (var x = 0; x < reparsed.length; x++) jsonTableData_1.push(reparsed[x]);
+                                }
+                            } catch (e3) { new obsidian.Notice("JSON格式不正确，无法切换回表格"); return; }
+                            inputElements[col.name] = hiddenInput;
+                            jTableBtnGroup.empty();
+                            // Re-add buttons
+                            var addRB = jTableBtnGroup.createEl("button", { text: "➕ 添加行", cls: "mod-muted" });
+                            addRB.addEventListener("click", function() {
+                                var nr = {};
+                                for (var ki4 = 0; ki4 < allKeys_1.length; ki4++) nr[allKeys_1[ki4]] = "";
+                                jsonTableData_1.push(nr);
+                                hiddenInput.value = JSON.stringify(jsonTableData_1);
+                                renderJsonTable_1();
+                            });
+                            var addCB = jTableBtnGroup.createEl("button", { text: "➕ 添加列", cls: "mod-muted" });
+                            addCB.addEventListener("click", function() {
+                                var nk = "新属性" + (allKeys_1.length + 1);
+                                var cnt = allKeys_1.length + 1;
+                                while (keySet_1[nk]) { cnt++; nk = "新属性" + cnt; }
+                                allKeys_1.push(nk);
+                                keySet_1[nk] = true;
+                                for (var ri3 = 0; ri3 < jsonTableData_1.length; ri3++) {
+                                    if (!jsonTableData_1[ri3]) jsonTableData_1[ri3] = {};
+                                    jsonTableData_1[ri3][nk] = "";
+                                }
+                                hiddenInput.value = JSON.stringify(jsonTableData_1);
+                                renderJsonTable_1();
+                            });
+                            jTableBtnGroup.createEl("button", { text: "📝 原始JSON", cls: "mod-muted" }).addEventListener("click", function() { rawBtn.click(); });
+                            renderJsonTable_1();
+                        });
+                    });
+                    
+                } else {
+                    // === TEXTAREA for non-table JSON (plain objects, simple arrays, etc.) ===
+                    var textarea_1 = fieldDiv.createEl("textarea", {
+                        cls: "sqlite-manager-form-input json-input",
+                        attr: { placeholder: "输入JSON格式的" + col.name, rows: "6", spellcheck: "false" }
+                    });
+                    textarea_1.value = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+                    inputElements[col.name] = textarea_1;
 
-                var btnGroup = fieldDiv.createDiv({ cls: "sqlite-manager-form-btn-group" });
-                var formatBtn = btnGroup.createEl("button", { text: "格式化JSON", cls: "mod-muted" });
-                formatBtn.addEventListener("click", function() {
-                    try {
-                        var parsed = JSON.parse(textarea_1.value);
-                        textarea_1.value = JSON.stringify(parsed, null, 2);
-                    } catch (e) {
-                        new obsidian.Notice("JSON格式不正确，无法格式化");
-                    }
-                });
-                var compressBtn = btnGroup.createEl("button", { text: "压缩JSON", cls: "mod-muted" });
-                compressBtn.addEventListener("click", function() {
-                    try {
-                        var parsed = JSON.parse(textarea_1.value);
-                        textarea_1.value = JSON.stringify(parsed);
-                    } catch (e) {
-                        new obsidian.Notice("JSON格式不正确，无法压缩");
-                    }
-                });
+                    var btnGroup = fieldDiv.createDiv({ cls: "sqlite-manager-form-btn-group" });
+                    var formatBtn = btnGroup.createEl("button", { text: "格式化JSON", cls: "mod-muted" });
+                    formatBtn.addEventListener("click", function() {
+                        try {
+                            var parsed = JSON.parse(textarea_1.value);
+                            textarea_1.value = JSON.stringify(parsed, null, 2);
+                        } catch (e) {
+                            new obsidian.Notice("JSON格式不正确，无法格式化");
+                        }
+                    });
+                    var compressBtn = btnGroup.createEl("button", { text: "压缩JSON", cls: "mod-muted" });
+                    compressBtn.addEventListener("click", function() {
+                        try {
+                            var parsed = JSON.parse(textarea_1.value);
+                            textarea_1.value = JSON.stringify(parsed);
+                        } catch (e) {
+                            new obsidian.Notice("JSON格式不正确，无法压缩");
+                        }
+                    });
+                }
             } else {
                 var input_1 = fieldDiv.createEl("input", {
                     cls: "sqlite-manager-form-input",
