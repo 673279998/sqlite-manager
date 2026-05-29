@@ -1,0 +1,23 @@
+{
+  "name": "obsidian-sqlite-manager",
+  "version": "1.0.0",
+  "description": "SQLite database viewer and manager for Obsidian with JSON field support",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^16.11.6",
+    "esbuild": "0.17.3",
+    "obsidian": "latest",
+    "tslib": "2.4.0",
+    "typescript": "4.7.4"
+  },
+  "dependencies": {
+    "sql.js": "^1.10.3"
+  }
+}
