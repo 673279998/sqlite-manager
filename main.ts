@@ -8,7 +8,6 @@ import {
 	WorkspaceLeaf,
 	Modal,
 	FuzzySuggestModal,
-	ItemView,
 } from "obsidian";
 
 import initSqlJs, { Database } from "sql.js";
@@ -78,8 +77,8 @@ function getColumns(db: Database, table: string): ColumnInfo[] {
 		name: v[1] as string,
 		type: (v[2] as string) || "",
 		notnull: v[3] as number,
-		dflt_value: v[4] as string | null,
-		pk: v[5] as number,
+		pk: v[4] as number,
+		dflt_value: v[5] as string | null,
 	}));
 }
 
@@ -209,6 +208,7 @@ class EditRowModal extends Modal {
 		contentEl.createEl("h2", { text: title });
 
 		const form = contentEl.createDiv({ cls: "sqlite-manager-form" });
+		const inputElements: Record<string, HTMLInputElement | HTMLTextAreaElement> = {};
 
 		for (const col of this.columns) {
 			const isAutoIncrement =
@@ -243,95 +243,245 @@ class EditRowModal extends Modal {
 
 			const value = this.rowData[col.name];
 
-			// Check if this looks like a JSON field
+			// Only detect JSON fields when EDITING existing data (not for new rows)
 			const isJsonField =
+				this.isEdit &&
 				typeof value === "string" &&
 				(value.trim().startsWith("[") || value.trim().startsWith("{"));
 
 			if (isJsonField) {
-				const textarea = fieldDiv.createEl("textarea", {
-					cls: "sqlite-manager-form-input json-input",
-					attr: {
-						placeholder: `输入JSON格式的${col.name}`,
-						rows: "6",
-						spellcheck: "false",
-					},
-				});
-				textarea.value =
-					typeof value === "string"
-						? value
-						: JSON.stringify(value, null, 2);
+				// Parse the JSON value
+				let parsedJson: any = null;
+				try { parsedJson = JSON.parse(value); } catch { parsedJson = null; }
 
-				// JSON format button
-				const btnGroup = fieldDiv.createDiv({
-					cls: "sqlite-manager-form-btn-group",
-				});
-				const formatBtn = btnGroup.createEl("button", {
-					text: "格式化JSON",
-					cls: "mod-muted",
-				});
-				formatBtn.addEventListener("click", () => {
-					try {
-						const parsed = JSON.parse(textarea.value);
-						textarea.value = JSON.stringify(parsed, null, 2);
-					} catch {
-						new Notice("JSON格式不正确，无法格式化");
-					}
-				});
-				const compressBtn = btnGroup.createEl("button", {
-					text: "压缩JSON",
-					cls: "mod-muted",
-				});
-				compressBtn.addEventListener("click", () => {
-					try {
-						const parsed = JSON.parse(textarea.value);
-						textarea.value = JSON.stringify(parsed);
-					} catch {
-						new Notice("JSON格式不正确，无法压缩");
-					}
-				});
+				// Check if it's a table-like JSON (array of objects)
+				const isTableLike =
+					parsedJson &&
+					Array.isArray(parsedJson) &&
+					parsedJson.length > 0 &&
+					typeof parsedJson[0] === "object" &&
+					parsedJson[0] !== null;
+				const isEmptyArray =
+					parsedJson && Array.isArray(parsedJson) && parsedJson.length === 0;
 
-				textarea.addEventListener("change", () => {
-					this.rowData[col.name] = textarea.value || null;
-				});
+				if (isTableLike || isEmptyArray) {
+					// === TABLE EDITOR for JSON arrays of objects (IIFE for closure isolation) ===
+					((colName: string, fieldDivEl: HTMLElement, parsedData: any[], inputEls: Record<string, HTMLInputElement | HTMLTextAreaElement>) => {
+						const jsonTableData = parsedData.slice();
+						const allKeys: string[] = [];
+						const keySet: Record<string, boolean> = {};
+						for (const obj of jsonTableData) {
+							if (obj && typeof obj === "object") {
+								for (const k in obj) {
+									if (obj.hasOwnProperty(k) && !keySet[k]) {
+										keySet[k] = true;
+										allKeys.push(k);
+									}
+								}
+							}
+						}
+
+						const hiddenInput = fieldDivEl.createEl("input", {
+							cls: "sqlite-manager-json-hidden",
+							attr: { type: "hidden" },
+						});
+						hiddenInput.value = JSON.stringify(jsonTableData);
+						inputEls[colName] = hiddenInput;
+
+						const tableContainer = fieldDivEl.createDiv({ cls: "sqlite-manager-json-editor" });
+
+						const renderJsonTable = () => {
+							tableContainer.empty();
+							allKeys.length = 0;
+							for (const k in keySet) delete keySet[k];
+							for (const obj of jsonTableData) {
+								if (obj && typeof obj === "object") {
+									for (const k in obj) {
+										if (obj.hasOwnProperty(k) && !keySet[k]) {
+											keySet[k] = true;
+											allKeys.push(k);
+										}
+									}
+								}
+							}
+							if (allKeys.length === 0) {
+								allKeys.push("属性1");
+								keySet["属性1"] = true;
+							}
+
+							const jTable = tableContainer.createEl("table", { cls: "sqlite-manager-edit-json-table" });
+							const jThead = jTable.createEl("thead");
+							const hRow = jThead.createEl("tr");
+							hRow.createEl("th", { text: "#", cls: "sqlite-manager-edit-json-row-num" });
+							for (const key of allKeys) hRow.createEl("th", { text: key });
+							hRow.createEl("th", { text: "操作", cls: "sqlite-manager-edit-json-actions" });
+
+							const jTbody = jTable.createEl("tbody");
+							for (let ri = 0; ri < jsonTableData.length; ri++) {
+								const rowData = jsonTableData[ri] || {};
+								const bRow = jTbody.createEl("tr");
+								bRow.createEl("td", { text: String(ri + 1), cls: "sqlite-manager-edit-json-row-num" });
+								for (const key of allKeys) {
+									const td = bRow.createEl("td");
+									const cellInput = td.createEl("input", {
+										cls: "sqlite-manager-edit-json-cell",
+										attr: { type: "text", spellcheck: "false", placeholder: key },
+									});
+									cellInput.value = rowData[key] !== undefined && rowData[key] !== null ? String(rowData[key]) : "";
+									cellInput.dataset.rowIdx = String(ri);
+									cellInput.dataset.key = key;
+									cellInput.addEventListener("input", function () {
+										const rIdx = parseInt(this.dataset.rowIdx!);
+										const rKey = this.dataset.key!;
+										if (!jsonTableData[rIdx]) jsonTableData[rIdx] = {};
+										jsonTableData[rIdx][rKey] = this.value;
+										hiddenInput.value = JSON.stringify(jsonTableData);
+									});
+								}
+								const actTd = bRow.createEl("td", { cls: "sqlite-manager-edit-json-actions" });
+								const delRowBtn = actTd.createEl("button", { text: "✕", cls: "sqlite-manager-edit-json-del-row" });
+								delRowBtn.dataset.rowIdx = String(ri);
+								delRowBtn.addEventListener("click", function () {
+									const delIdx = parseInt(this.dataset.rowIdx!);
+									jsonTableData.splice(delIdx, 1);
+									hiddenInput.value = JSON.stringify(jsonTableData);
+									renderJsonTable();
+								});
+							}
+							tableContainer.createDiv({ cls: "sqlite-manager-json-editor-count", text: `共 ${jsonTableData.length} 条记录` });
+						};
+
+						renderJsonTable();
+
+						const jTableBtnGroup = fieldDivEl.createDiv({ cls: "sqlite-manager-form-btn-group" });
+						const addRowBtn = jTableBtnGroup.createEl("button", { text: "➕ 添加行", cls: "mod-muted" });
+						addRowBtn.addEventListener("click", () => {
+							const newRow: Record<string, string> = {};
+							for (const key of allKeys) newRow[key] = "";
+							jsonTableData.push(newRow);
+							hiddenInput.value = JSON.stringify(jsonTableData);
+							renderJsonTable();
+						});
+						const addColBtn = jTableBtnGroup.createEl("button", { text: "➕ 添加列", cls: "mod-muted" });
+						addColBtn.addEventListener("click", () => {
+							let newKeyName = `新属性${allKeys.length + 1}`;
+							let counter = allKeys.length + 1;
+							while (keySet[newKeyName]) { counter++; newKeyName = `新属性${counter}`; }
+							allKeys.push(newKeyName);
+							keySet[newKeyName] = true;
+							for (const row of jsonTableData) { if (row) row[newKeyName] = ""; }
+							hiddenInput.value = JSON.stringify(jsonTableData);
+							renderJsonTable();
+						});
+						const rawBtn = jTableBtnGroup.createEl("button", { text: "📝 原始JSON", cls: "mod-muted" });
+						rawBtn.addEventListener("click", () => {
+							tableContainer.empty();
+							jTableBtnGroup.empty();
+							const rawTextarea = tableContainer.createEl("textarea", {
+								cls: "sqlite-manager-form-input json-input",
+								attr: { rows: "8", spellcheck: "false" },
+							});
+							rawTextarea.value = JSON.stringify(jsonTableData, null, 2);
+							inputEls[colName] = rawTextarea;
+							const rawBtnGroup = jTableBtnGroup.createDiv({ cls: "sqlite-manager-form-btn-group" });
+							const formatBtn2 = rawBtnGroup.createEl("button", { text: "格式化JSON", cls: "mod-muted" });
+							formatBtn2.addEventListener("click", () => {
+								try { const p = JSON.parse(rawTextarea.value); rawTextarea.value = JSON.stringify(p, null, 2); }
+								catch { new Notice("JSON格式不正确"); }
+							});
+							const backBtn = rawBtnGroup.createEl("button", { text: "📊 表格编辑", cls: "mod-muted" });
+							backBtn.addEventListener("click", () => {
+								try {
+									const reparsed = JSON.parse(rawTextarea.value);
+									if (Array.isArray(reparsed)) {
+										jsonTableData.length = 0;
+										for (const item of reparsed) jsonTableData.push(item);
+									}
+								} catch { new Notice("JSON格式不正确，无法切换回表格"); return; }
+								inputEls[colName] = hiddenInput;
+								jTableBtnGroup.empty();
+								const addRB = jTableBtnGroup.createEl("button", { text: "➕ 添加行", cls: "mod-muted" });
+								addRB.addEventListener("click", () => {
+									const nr: Record<string, string> = {};
+									for (const key of allKeys) nr[key] = "";
+									jsonTableData.push(nr);
+									hiddenInput.value = JSON.stringify(jsonTableData);
+									renderJsonTable();
+								});
+								const addCB = jTableBtnGroup.createEl("button", { text: "➕ 添加列", cls: "mod-muted" });
+								addCB.addEventListener("click", () => {
+									let nk = `新属性${allKeys.length + 1}`;
+									let cnt = allKeys.length + 1;
+									while (keySet[nk]) { cnt++; nk = `新属性${cnt}`; }
+									allKeys.push(nk);
+									keySet[nk] = true;
+									for (const r of jsonTableData) { if (r) r[nk] = ""; }
+									hiddenInput.value = JSON.stringify(jsonTableData);
+									renderJsonTable();
+								});
+								jTableBtnGroup.createEl("button", { text: "📝 原始JSON", cls: "mod-muted" })
+									.addEventListener("click", () => rawBtn.click());
+								renderJsonTable();
+							});
+						});
+					})(col.name, fieldDiv, parsedJson, inputElements);
+
+				} else {
+					// === TEXTAREA for non-table JSON (plain objects, etc.) ===
+					const textarea = fieldDiv.createEl("textarea", {
+						cls: "sqlite-manager-form-input json-input",
+						attr: { placeholder: `输入JSON格式的${col.name}`, rows: "6", spellcheck: "false" },
+					});
+					textarea.value = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+					inputElements[col.name] = textarea;
+
+					const btnGroup = fieldDiv.createDiv({ cls: "sqlite-manager-form-btn-group" });
+					const formatBtn = btnGroup.createEl("button", { text: "格式化JSON", cls: "mod-muted" });
+					formatBtn.addEventListener("click", () => {
+						try { const parsed = JSON.parse(textarea.value); textarea.value = JSON.stringify(parsed, null, 2); }
+						catch { new Notice("JSON格式不正确，无法格式化"); }
+					});
+					const compressBtn = btnGroup.createEl("button", { text: "压缩JSON", cls: "mod-muted" });
+					compressBtn.addEventListener("click", () => {
+						try { const parsed = JSON.parse(textarea.value); textarea.value = JSON.stringify(parsed); }
+						catch { new Notice("JSON格式不正确，无法压缩"); }
+					});
+				}
 			} else {
 				const input = fieldDiv.createEl("input", {
 					cls: "sqlite-manager-form-input",
 					attr: {
 						type: "text",
-						placeholder: isAutoIncrement
-							? "自动生成"
-							: `输入${col.name}`,
+						placeholder: isAutoIncrement ? "自动生成" : `输入${col.name}`,
 						spellcheck: "false",
 					},
 				});
 				input.value = value !== null && value !== undefined ? String(value) : "";
-				if (isAutoIncrement) {
-					input.disabled = true;
-				}
-				input.addEventListener("change", () => {
-					this.rowData[col.name] = input.value || null;
-				});
+				if (isAutoIncrement) input.disabled = true;
+				inputElements[col.name] = input;
 			}
 		}
 
 		// Buttons
-		const btnDiv = contentEl.createDiv({
-			cls: "sqlite-manager-form-actions",
-		});
-		const saveBtn = btnDiv.createEl("button", {
-			text: "保存",
-			cls: "mod-cta",
-		});
+		const btnDiv = contentEl.createDiv({ cls: "sqlite-manager-form-actions" });
+		const saveBtn = btnDiv.createEl("button", { text: "保存", cls: "mod-cta" });
 		saveBtn.addEventListener("click", (e) => {
 			e.preventDefault();
-			this.onSave(this.rowData);
+			const newData: Record<string, any> = {};
+			for (const col of this.columns) {
+				const isAutoIncrement = col.pk === 1 && col.type.toUpperCase() === "INTEGER";
+				if (this.isEdit && isAutoIncrement) {
+					newData[col.name] = this.rowData[col.name];
+					continue;
+				}
+				const el = inputElements[col.name];
+				newData[col.name] = el ? (el.value || null) : null;
+			}
+			this.onSave(newData);
 			this.close();
 		});
 		const cancelBtn = btnDiv.createEl("button", { text: "取消" });
-		cancelBtn.addEventListener("click", () => {
-			this.close();
-		});
+		cancelBtn.addEventListener("click", () => { this.close(); });
 	}
 
 	onClose() {
@@ -1118,10 +1268,7 @@ class SqliteManagerView extends ItemView {
 					const whereValues = pkColumns.map((col) => row[col.name]);
 
 					const sql = `UPDATE "${this.currentTable}" SET ${setClauses.join(", ")} WHERE ${whereClauses.join(" AND ")}`;
-					const stmt = this.db!.prepare(sql);
-					stmt.bind([...values, ...whereValues]);
-					stmt.step();
-					stmt.free();
+					this.db!.run(sql, [...values, ...whereValues]);
 
 					new Notice("记录已更新（请保存数据库以持久化更改）");
 					this.currentData = getTableData(
@@ -1159,10 +1306,7 @@ class SqliteManagerView extends ItemView {
 					const whereValues = pkColumns.map((col) => row[col.name]);
 
 					const sql = `DELETE FROM "${this.currentTable}" WHERE ${whereClauses.join(" AND ")}`;
-					const stmt = this.db!.prepare(sql);
-					stmt.bind(whereValues);
-					stmt.step();
-					stmt.free();
+					this.db!.run(sql, whereValues);
 
 					new Notice("记录已删除（请保存数据库以持久化更改）");
 					this.currentData = getTableData(
@@ -1230,10 +1374,7 @@ class SqliteManagerView extends ItemView {
 					}
 
 					const sql = `INSERT INTO "${this.currentTable}" (${insertColumns.join(", ")}) VALUES (${placeholders.join(", ")})`;
-					const stmt = this.db!.prepare(sql);
-					stmt.bind(insertValues);
-					stmt.step();
-					stmt.free();
+					this.db!.run(sql, insertValues);
 
 					new Notice("记录已添加（请保存数据库以持久化更改）");
 					this.currentData = getTableData(
@@ -1311,6 +1452,9 @@ class SqliteManagerView extends ItemView {
 			.sort();
 	}
 }
+
+// Import ItemView from obsidian
+import { ItemView } from "obsidian";
 
 // ============================================================
 // Main Plugin Class

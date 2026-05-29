@@ -7,29 +7,22 @@ View and manage SQLite databases with JSON field support
 var obsidian = require("obsidian");
 
 // ============================================================
-// __extends helper (must be before class definitions)
-// ============================================================
-
-var __extends = function(d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-
-// ============================================================
 // SQL.js dynamic loader
 // ============================================================
 
 var SQL_MODULE = null;
 
-function getSqlJs(wasmPath) {
-    if (SQL_MODULE) return Promise.resolve(SQL_MODULE);
+async function getSqlJs(wasmPath) {
+    if (SQL_MODULE) return SQL_MODULE;
     
+    // Load sql.js from CDN
     var sqlJsUrl = "https://sql.js.org/dist/sql-wasm.js";
     
+    // Try loading via script tag
     return new Promise(function(resolve, reject) {
         if (typeof window.initSqlJs === "function") {
-            var locateFile = wasmPath
+            // Already loaded
+            var locateFile = wasmPath 
                 ? function() { return wasmPath; }
                 : function(file) { return "https://sql.js.org/dist/" + file; };
             window.initSqlJs({ locateFile: locateFile }).then(function(SQL) {
@@ -42,7 +35,7 @@ function getSqlJs(wasmPath) {
         var script = document.createElement("script");
         script.src = sqlJsUrl;
         script.onload = function() {
-            var locateFile = wasmPath
+            var locateFile = wasmPath 
                 ? function() { return wasmPath; }
                 : function(file) { return "https://sql.js.org/dist/" + file; };
             window.initSqlJs({ locateFile: locateFile }).then(function(SQL) {
@@ -64,7 +57,7 @@ function getSqlJs(wasmPath) {
 function tryParseJson(value) {
     if (typeof value !== "string") return null;
     var trimmed = value.trim();
-    if (!((trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    if (!((trimmed.startsWith("{") && trimmed.endsWith("}")) || 
           (trimmed.startsWith("[") && trimmed.endsWith("]")))) {
         return null;
     }
@@ -93,7 +86,13 @@ function getColumns(db, table) {
     var result = db.exec('PRAGMA table_info("' + table + '")');
     if (!result.length) return [];
     return result[0].values.map(function(v) {
-        return { name: v[1], type: v[2] || "", notnull: v[3], dflt_value: v[4], pk: v[5] };
+        return {
+            name: v[1],
+            type: v[2] || "",
+            notnull: v[3],
+            pk: v[4],
+            dflt_value: v[5]
+        };
     });
 }
 
@@ -135,17 +134,6 @@ function prepareValue(value, col) {
     return String(value);
 }
 
-// Helper: execute a parameterized SQL statement
-// Uses db.run() which internally handles parameter binding correctly
-function executeSql(db, sql, params) {
-    if (params && params.length > 0) {
-        db.run(sql, params);
-    } else {
-        db.run(sql);
-    }
-    return true;
-}
-
 // ============================================================
 // DB File Picker Modal
 // ============================================================
@@ -160,9 +148,15 @@ var DbFileSuggestModal = (function(_super) {
         _this.emptyStateText = "没有找到数据库文件";
         return _this;
     }
-    DbFileSuggestModal.prototype.getItems = function() { return this.dbFiles; };
-    DbFileSuggestModal.prototype.getItemText = function(item) { return item; };
-    DbFileSuggestModal.prototype.onChooseItem = function(item, _evt) { this.resolveCallback(item); };
+    DbFileSuggestModal.prototype.getItems = function() {
+        return this.dbFiles;
+    };
+    DbFileSuggestModal.prototype.getItemText = function(item) {
+        return item;
+    };
+    DbFileSuggestModal.prototype.onChooseItem = function(item, _evt) {
+        this.resolveCallback(item);
+    };
     return DbFileSuggestModal;
 })(obsidian.FuzzySuggestModal);
 
@@ -186,22 +180,22 @@ var EditRowModal = (function(_super) {
         var contentEl = this.contentEl;
         contentEl.empty();
         contentEl.addClass("sqlite-manager-modal");
-
+        
         var title = this.isEdit ? "编辑记录" : "新增记录";
         contentEl.createEl("h2", { text: title });
-
+        
         var form = contentEl.createDiv({ cls: "sqlite-manager-form" });
         var inputElements = {};
-
+        
         for (var _i = 0, _a = this.columns; _i < _a.length; _i++) {
             var col = _a[_i];
             var isAutoIncrement = col.pk === 1 && col.type.toUpperCase() === "INTEGER";
             if (this.isEdit && isAutoIncrement) continue;
-
+            
             var fieldDiv = form.createDiv({ cls: "sqlite-manager-form-field" });
             var label = fieldDiv.createEl("label", { cls: "sqlite-manager-form-label" });
             label.textContent = col.name;
-
+            
             if (col.pk === 1) {
                 label.createSpan({ cls: "sqlite-manager-badge pk", text: "PK" });
             }
@@ -210,264 +204,226 @@ var EditRowModal = (function(_super) {
             }
             var typeHint = label.createSpan({ cls: "sqlite-manager-type-hint" });
             typeHint.textContent = col.type || "TEXT";
-
+            
             var value = this.rowData[col.name];
-            var isJsonField = typeof value === "string" &&
+            // Only detect JSON fields when EDITING existing data (not for new rows)
+            var isJsonField = this.isEdit && typeof value === "string" && 
                 (value.trim().startsWith("[") || value.trim().startsWith("{"));
-            // Also detect JSON-like fields when value is null (new row) based on column name hints
-            var isJsonLikely = !isJsonField && (value === null || value === undefined || value === "") && (
-                col.name.toLowerCase().includes("原料") ||
-                col.name.toLowerCase().includes("配方") ||
-                col.name.toLowerCase().includes("配料") ||
-                col.name.toLowerCase().includes("成分") ||
-                col.name.toLowerCase().includes("json") ||
-                col.name.toLowerCase().includes("list") ||
-                col.name.toLowerCase().includes("items") ||
-                col.name.toLowerCase().includes("array") ||
-                (col.type && col.type.toUpperCase().includes("JSON"))
-            );
-
-            if (isJsonField || isJsonLikely) {
+            
+            if (isJsonField) {
                 // Parse the JSON value
                 var parsedJson = null;
-                try { parsedJson = JSON.parse(typeof value === "string" ? value : JSON.stringify(value)); } catch (e) { parsedJson = null; }
-                
-                // If value is null/empty but field is likely JSON, initialize as empty array
-                if (!parsedJson && isJsonLikely) {
-                    parsedJson = [];
-                }
+                try { parsedJson = JSON.parse(value); } catch (e) { parsedJson = null; }
                 
                 // Check if it's a table-like JSON (array of objects)
                 var isTableLike = parsedJson && Array.isArray(parsedJson) && parsedJson.length > 0 && typeof parsedJson[0] === "object" && parsedJson[0] !== null;
-                // Also check if it's an empty array (could become table-like)
                 var isEmptyArray = parsedJson && Array.isArray(parsedJson) && parsedJson.length === 0;
                 
                 if (isTableLike || isEmptyArray) {
-                    // === TABLE EDITOR for JSON arrays of objects ===
-                    var jsonTableData_1 = parsedJson.slice(); // working copy of the array
-                    // Collect all unique keys from all objects
-                    var allKeys_1 = [];
-                    var keySet_1 = {};
-                    for (var _j = 0; _j < jsonTableData_1.length; _j++) {
-                        var obj = jsonTableData_1[_j];
-                        if (obj && typeof obj === "object") {
-                            for (var k in obj) {
-                                if (obj.hasOwnProperty(k) && !keySet_1[k]) {
-                                    keySet_1[k] = true;
-                                    allKeys_1.push(k);
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Hidden input to store the final JSON value (used by save logic)
-                    var hiddenInput = fieldDiv.createEl("input", {
-                        cls: "sqlite-manager-json-hidden",
-                        attr: { type: "hidden" }
-                    });
-                    hiddenInput.value = JSON.stringify(jsonTableData_1);
-                    inputElements[col.name] = hiddenInput;
-                    
-                    // Table container
-                    var tableContainer_1 = fieldDiv.createDiv({ cls: "sqlite-manager-json-editor" });
-                    
-                    function renderJsonTable_1() {
-                        tableContainer_1.empty();
-                        
-                        // Re-collect keys in case new rows added new keys
-                        allKeys_1.length = 0;
-                        keySet_1 = {};
-                        for (var j = 0; j < jsonTableData_1.length; j++) {
-                            var obj = jsonTableData_1[j];
+                    // === TABLE EDITOR for JSON arrays of objects (IIFE for closure isolation) ===
+                    (function(colName, fieldDivEl, parsedData, inputEls) {
+                        var jsonTableData = parsedData.slice();
+                        var allKeys = [];
+                        var keySet = {};
+                        for (var _j = 0; _j < jsonTableData.length; _j++) {
+                            var obj = jsonTableData[_j];
                             if (obj && typeof obj === "object") {
                                 for (var k in obj) {
-                                    if (obj.hasOwnProperty(k) && !keySet_1[k]) {
-                                        keySet_1[k] = true;
-                                        allKeys_1.push(k);
+                                    if (obj.hasOwnProperty(k) && !keySet[k]) {
+                                        keySet[k] = true;
+                                        allKeys.push(k);
                                     }
                                 }
                             }
                         }
                         
-                        if (allKeys_1.length === 0) {
-                            allKeys_1.push("属性1");
-                            keySet_1["属性1"] = true;
-                        }
+                        var hiddenInput = fieldDivEl.createEl("input", {
+                            cls: "sqlite-manager-json-hidden",
+                            attr: { type: "hidden" }
+                        });
+                        hiddenInput.value = JSON.stringify(jsonTableData);
+                        inputEls[colName] = hiddenInput;
                         
-                        var jTable = tableContainer_1.createEl("table", { cls: "sqlite-manager-edit-json-table" });
+                        var tableContainer = fieldDivEl.createDiv({ cls: "sqlite-manager-json-editor" });
                         
-                        // Header row
-                        var jThead = jTable.createEl("thead");
-                        var hRow = jThead.createEl("tr");
-                        hRow.createEl("th", { text: "#", cls: "sqlite-manager-edit-json-row-num" });
-                        for (var ki = 0; ki < allKeys_1.length; ki++) {
-                            hRow.createEl("th", { text: allKeys_1[ki] });
-                        }
-                        hRow.createEl("th", { text: "操作", cls: "sqlite-manager-edit-json-actions" });
-                        
-                        // Body rows
-                        var jTbody = jTable.createEl("tbody");
-                        for (var ri = 0; ri < jsonTableData_1.length; ri++) {
-                            var rowData = jsonTableData_1[ri] || {};
-                            var bRow = jTbody.createEl("tr");
-                            bRow.createEl("td", { text: String(ri + 1), cls: "sqlite-manager-edit-json-row-num" });
+                        function renderJsonTable() {
+                            tableContainer.empty();
                             
-                            for (var ki2 = 0; ki2 < allKeys_1.length; ki2++) {
-                                var td = bRow.createEl("td");
-                                var cellInput = td.createEl("input", {
-                                    cls: "sqlite-manager-edit-json-cell",
-                                    attr: { type: "text", spellcheck: "false", placeholder: allKeys_1[ki2] }
-                                });
-                                cellInput.value = rowData[allKeys_1[ki2]] !== undefined && rowData[allKeys_1[ki2]] !== null ? String(rowData[allKeys_1[ki2]]) : "";
-                                // Store row index and key on the element for retrieval
-                                cellInput.dataset.rowIdx = String(ri);
-                                cellInput.dataset.key = allKeys_1[ki2];
-                                cellInput.addEventListener("input", function() {
-                                    var rIdx = parseInt(this.dataset.rowIdx);
-                                    var rKey = this.dataset.key;
-                                    if (!jsonTableData_1[rIdx]) jsonTableData_1[rIdx] = {};
-                                    jsonTableData_1[rIdx][rKey] = this.value;
-                                    hiddenInput.value = JSON.stringify(jsonTableData_1);
+                            allKeys.length = 0;
+                            for (var k2 in keySet) delete keySet[k2];
+                            for (var j = 0; j < jsonTableData.length; j++) {
+                                var obj2 = jsonTableData[j];
+                                if (obj2 && typeof obj2 === "object") {
+                                    for (var k3 in obj2) {
+                                        if (obj2.hasOwnProperty(k3) && !keySet[k3]) {
+                                            keySet[k3] = true;
+                                            allKeys.push(k3);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if (allKeys.length === 0) {
+                                allKeys.push("属性1");
+                                keySet["属性1"] = true;
+                            }
+                            
+                            var jTable = tableContainer.createEl("table", { cls: "sqlite-manager-edit-json-table" });
+                            
+                            var jThead = jTable.createEl("thead");
+                            var hRow = jThead.createEl("tr");
+                            hRow.createEl("th", { text: "#", cls: "sqlite-manager-edit-json-row-num" });
+                            for (var ki = 0; ki < allKeys.length; ki++) {
+                                hRow.createEl("th", { text: allKeys[ki] });
+                            }
+                            hRow.createEl("th", { text: "操作", cls: "sqlite-manager-edit-json-actions" });
+                            
+                            var jTbody = jTable.createEl("tbody");
+                            for (var ri = 0; ri < jsonTableData.length; ri++) {
+                                var rowData = jsonTableData[ri] || {};
+                                var bRow = jTbody.createEl("tr");
+                                bRow.createEl("td", { text: String(ri + 1), cls: "sqlite-manager-edit-json-row-num" });
+                                
+                                for (var ki2 = 0; ki2 < allKeys.length; ki2++) {
+                                    var td = bRow.createEl("td");
+                                    var cellInput = td.createEl("input", {
+                                        cls: "sqlite-manager-edit-json-cell",
+                                        attr: { type: "text", spellcheck: "false", placeholder: allKeys[ki2] }
+                                    });
+                                    cellInput.value = rowData[allKeys[ki2]] !== undefined && rowData[allKeys[ki2]] !== null ? String(rowData[allKeys[ki2]]) : "";
+                                    cellInput.dataset.rowIdx = String(ri);
+                                    cellInput.dataset.key = allKeys[ki2];
+                                    cellInput.addEventListener("input", function() {
+                                        var rIdx = parseInt(this.dataset.rowIdx);
+                                        var rKey = this.dataset.key;
+                                        if (!jsonTableData[rIdx]) jsonTableData[rIdx] = {};
+                                        jsonTableData[rIdx][rKey] = this.value;
+                                        hiddenInput.value = JSON.stringify(jsonTableData);
+                                    });
+                                }
+                                
+                                var actTd = bRow.createEl("td", { cls: "sqlite-manager-edit-json-actions" });
+                                var delRowBtn = actTd.createEl("button", { text: "✕", cls: "sqlite-manager-edit-json-del-row" });
+                                delRowBtn.dataset.rowIdx = String(ri);
+                                delRowBtn.addEventListener("click", function() {
+                                    var delIdx = parseInt(this.dataset.rowIdx);
+                                    jsonTableData.splice(delIdx, 1);
+                                    hiddenInput.value = JSON.stringify(jsonTableData);
+                                    renderJsonTable();
                                 });
                             }
                             
-                            // Delete row button
-                            var actTd = bRow.createEl("td", { cls: "sqlite-manager-edit-json-actions" });
-                            var delRowBtn = actTd.createEl("button", { text: "✕", cls: "sqlite-manager-edit-json-del-row" });
-                            delRowBtn.dataset.rowIdx = String(ri);
-                            delRowBtn.addEventListener("click", function() {
-                                var delIdx = parseInt(this.dataset.rowIdx);
-                                jsonTableData_1.splice(delIdx, 1);
-                                hiddenInput.value = JSON.stringify(jsonTableData_1);
-                                renderJsonTable_1();
-                            });
+                            tableContainer.createDiv({ cls: "sqlite-manager-json-editor-count", text: "共 " + jsonTableData.length + " 条记录" });
                         }
                         
-                        // Row count
-                        tableContainer_1.createDiv({ cls: "sqlite-manager-json-editor-count", text: "共 " + jsonTableData_1.length + " 条记录" });
-                    }
-                    
-                    renderJsonTable_1();
-                    
-                    // Button group for table editor
-                    var jTableBtnGroup = fieldDiv.createDiv({ cls: "sqlite-manager-form-btn-group" });
-                    var addRowBtn = jTableBtnGroup.createEl("button", { text: "➕ 添加行", cls: "mod-muted" });
-                    addRowBtn.addEventListener("click", function() {
-                        var newRow = {};
-                        for (var ki3 = 0; ki3 < allKeys_1.length; ki3++) {
-                            newRow[allKeys_1[ki3]] = "";
-                        }
-                        jsonTableData_1.push(newRow);
-                        hiddenInput.value = JSON.stringify(jsonTableData_1);
-                        renderJsonTable_1();
-                    });
-                    
-                    // Add column button
-                    var addColBtn = jTableBtnGroup.createEl("button", { text: "➕ 添加列", cls: "mod-muted" });
-                    addColBtn.addEventListener("click", function() {
-                        var newKeyName = "新属性" + (allKeys_1.length + 1);
-                        var counter = allKeys_1.length + 1;
-                        while (keySet_1[newKeyName]) {
-                            counter++;
-                            newKeyName = "新属性" + counter;
-                        }
-                        allKeys_1.push(newKeyName);
-                        keySet_1[newKeyName] = true;
-                        // Add the new key to all existing rows
-                        for (var ri2 = 0; ri2 < jsonTableData_1.length; ri2++) {
-                            if (!jsonTableData_1[ri2]) jsonTableData_1[ri2] = {};
-                            jsonTableData_1[ri2][newKeyName] = "";
-                        }
-                        hiddenInput.value = JSON.stringify(jsonTableData_1);
-                        renderJsonTable_1();
-                    });
-                    
-                    // Switch to raw JSON editor
-                    var rawBtn = jTableBtnGroup.createEl("button", { text: "📝 原始JSON", cls: "mod-muted" });
-                    rawBtn.addEventListener("click", function() {
-                        tableContainer_1.empty();
-                        jTableBtnGroup.empty();
-                        var rawTextarea = tableContainer_1.createEl("textarea", {
-                            cls: "sqlite-manager-form-input json-input",
-                            attr: { rows: "8", spellcheck: "false" }
-                        });
-                        rawTextarea.value = JSON.stringify(jsonTableData_1, null, 2);
-                        inputElements[col.name] = rawTextarea;
+                        renderJsonTable();
                         
-                        var rawBtnGroup2 = jTableBtnGroup.createDiv({ cls: "sqlite-manager-form-btn-group" });
-                        var formatBtn2 = rawBtnGroup2.createEl("button", { text: "格式化JSON", cls: "mod-muted" });
-                        formatBtn2.addEventListener("click", function() {
-                            try {
-                                var p = JSON.parse(rawTextarea.value);
-                                rawTextarea.value = JSON.stringify(p, null, 2);
-                            } catch (e2) { new obsidian.Notice("JSON格式不正确"); }
+                        var jTableBtnGroup = fieldDivEl.createDiv({ cls: "sqlite-manager-form-btn-group" });
+                        var addRowBtn = jTableBtnGroup.createEl("button", { text: "➕ 添加行", cls: "mod-muted" });
+                        addRowBtn.addEventListener("click", function() {
+                            var newRow = {};
+                            for (var ki3 = 0; ki3 < allKeys.length; ki3++) newRow[allKeys[ki3]] = "";
+                            jsonTableData.push(newRow);
+                            hiddenInput.value = JSON.stringify(jsonTableData);
+                            renderJsonTable();
                         });
-                        var backBtn = rawBtnGroup2.createEl("button", { text: "📊 表格编辑", cls: "mod-muted" });
-                        backBtn.addEventListener("click", function() {
-                            try {
-                                var reparsed = JSON.parse(rawTextarea.value);
-                                if (Array.isArray(reparsed)) {
-                                    jsonTableData_1.length = 0;
-                                    for (var x = 0; x < reparsed.length; x++) jsonTableData_1.push(reparsed[x]);
-                                }
-                            } catch (e3) { new obsidian.Notice("JSON格式不正确，无法切换回表格"); return; }
-                            inputElements[col.name] = hiddenInput;
+                        
+                        var addColBtn = jTableBtnGroup.createEl("button", { text: "➕ 添加列", cls: "mod-muted" });
+                        addColBtn.addEventListener("click", function() {
+                            var newKeyName = "新属性" + (allKeys.length + 1);
+                            var counter = allKeys.length + 1;
+                            while (keySet[newKeyName]) { counter++; newKeyName = "新属性" + counter; }
+                            allKeys.push(newKeyName);
+                            keySet[newKeyName] = true;
+                            for (var ri2 = 0; ri2 < jsonTableData.length; ri2++) {
+                                if (!jsonTableData[ri2]) jsonTableData[ri2] = {};
+                                jsonTableData[ri2][newKeyName] = "";
+                            }
+                            hiddenInput.value = JSON.stringify(jsonTableData);
+                            renderJsonTable();
+                        });
+                        
+                        var rawBtn = jTableBtnGroup.createEl("button", { text: "📝 原始JSON", cls: "mod-muted" });
+                        rawBtn.addEventListener("click", function() {
+                            tableContainer.empty();
                             jTableBtnGroup.empty();
-                            // Re-add buttons
-                            var addRB = jTableBtnGroup.createEl("button", { text: "➕ 添加行", cls: "mod-muted" });
-                            addRB.addEventListener("click", function() {
-                                var nr = {};
-                                for (var ki4 = 0; ki4 < allKeys_1.length; ki4++) nr[allKeys_1[ki4]] = "";
-                                jsonTableData_1.push(nr);
-                                hiddenInput.value = JSON.stringify(jsonTableData_1);
-                                renderJsonTable_1();
+                            var rawTextarea = tableContainer.createEl("textarea", {
+                                cls: "sqlite-manager-form-input json-input",
+                                attr: { rows: "8", spellcheck: "false" }
                             });
-                            var addCB = jTableBtnGroup.createEl("button", { text: "➕ 添加列", cls: "mod-muted" });
-                            addCB.addEventListener("click", function() {
-                                var nk = "新属性" + (allKeys_1.length + 1);
-                                var cnt = allKeys_1.length + 1;
-                                while (keySet_1[nk]) { cnt++; nk = "新属性" + cnt; }
-                                allKeys_1.push(nk);
-                                keySet_1[nk] = true;
-                                for (var ri3 = 0; ri3 < jsonTableData_1.length; ri3++) {
-                                    if (!jsonTableData_1[ri3]) jsonTableData_1[ri3] = {};
-                                    jsonTableData_1[ri3][nk] = "";
-                                }
-                                hiddenInput.value = JSON.stringify(jsonTableData_1);
-                                renderJsonTable_1();
+                            rawTextarea.value = JSON.stringify(jsonTableData, null, 2);
+                            inputEls[colName] = rawTextarea;
+                            
+                            var rawBtnGroup = jTableBtnGroup.createDiv({ cls: "sqlite-manager-form-btn-group" });
+                            var formatBtn2 = rawBtnGroup.createEl("button", { text: "格式化JSON", cls: "mod-muted" });
+                            formatBtn2.addEventListener("click", function() {
+                                try {
+                                    var p = JSON.parse(rawTextarea.value);
+                                    rawTextarea.value = JSON.stringify(p, null, 2);
+                                } catch (e2) { new obsidian.Notice("JSON格式不正确"); }
                             });
-                            jTableBtnGroup.createEl("button", { text: "📝 原始JSON", cls: "mod-muted" }).addEventListener("click", function() { rawBtn.click(); });
-                            renderJsonTable_1();
+                            var backBtn = rawBtnGroup.createEl("button", { text: "📊 表格编辑", cls: "mod-muted" });
+                            backBtn.addEventListener("click", function() {
+                                try {
+                                    var reparsed = JSON.parse(rawTextarea.value);
+                                    if (Array.isArray(reparsed)) {
+                                        jsonTableData.length = 0;
+                                        for (var x = 0; x < reparsed.length; x++) jsonTableData.push(reparsed[x]);
+                                    }
+                                } catch (e3) { new obsidian.Notice("JSON格式不正确，无法切换回表格"); return; }
+                                inputEls[colName] = hiddenInput;
+                                jTableBtnGroup.empty();
+                                var addRB = jTableBtnGroup.createEl("button", { text: "➕ 添加行", cls: "mod-muted" });
+                                addRB.addEventListener("click", function() {
+                                    var nr = {};
+                                    for (var ki4 = 0; ki4 < allKeys.length; ki4++) nr[allKeys[ki4]] = "";
+                                    jsonTableData.push(nr);
+                                    hiddenInput.value = JSON.stringify(jsonTableData);
+                                    renderJsonTable();
+                                });
+                                var addCB = jTableBtnGroup.createEl("button", { text: "➕ 添加列", cls: "mod-muted" });
+                                addCB.addEventListener("click", function() {
+                                    var nk = "新属性" + (allKeys.length + 1);
+                                    var cnt = allKeys.length + 1;
+                                    while (keySet[nk]) { cnt++; nk = "新属性" + cnt; }
+                                    allKeys.push(nk);
+                                    keySet[nk] = true;
+                                    for (var ri3 = 0; ri3 < jsonTableData.length; ri3++) {
+                                        if (!jsonTableData[ri3]) jsonTableData[ri3] = {};
+                                        jsonTableData[ri3][nk] = "";
+                                    }
+                                    hiddenInput.value = JSON.stringify(jsonTableData);
+                                    renderJsonTable();
+                                });
+                                jTableBtnGroup.createEl("button", { text: "📝 原始JSON", cls: "mod-muted" }).addEventListener("click", function() { rawBtn.click(); });
+                                renderJsonTable();
+                            });
                         });
-                    });
+                    })(col.name, fieldDiv, parsedJson, inputElements);
                     
                 } else {
-                    // === TEXTAREA for non-table JSON (plain objects, simple arrays, etc.) ===
+                    // === TEXTAREA for non-table JSON (plain objects, etc.) ===
                     var textarea_1 = fieldDiv.createEl("textarea", {
                         cls: "sqlite-manager-form-input json-input",
                         attr: { placeholder: "输入JSON格式的" + col.name, rows: "6", spellcheck: "false" }
                     });
                     textarea_1.value = typeof value === "string" ? value : JSON.stringify(value, null, 2);
                     inputElements[col.name] = textarea_1;
-
+                    
                     var btnGroup = fieldDiv.createDiv({ cls: "sqlite-manager-form-btn-group" });
                     var formatBtn = btnGroup.createEl("button", { text: "格式化JSON", cls: "mod-muted" });
                     formatBtn.addEventListener("click", function() {
                         try {
                             var parsed = JSON.parse(textarea_1.value);
                             textarea_1.value = JSON.stringify(parsed, null, 2);
-                        } catch (e) {
-                            new obsidian.Notice("JSON格式不正确，无法格式化");
-                        }
+                        } catch (e) { new obsidian.Notice("JSON格式不正确，无法格式化"); }
                     });
                     var compressBtn = btnGroup.createEl("button", { text: "压缩JSON", cls: "mod-muted" });
                     compressBtn.addEventListener("click", function() {
                         try {
                             var parsed = JSON.parse(textarea_1.value);
                             textarea_1.value = JSON.stringify(parsed);
-                        } catch (e) {
-                            new obsidian.Notice("JSON格式不正确，无法压缩");
-                        }
+                        } catch (e) { new obsidian.Notice("JSON格式不正确，无法压缩"); }
                     });
                 }
             } else {
@@ -484,7 +440,7 @@ var EditRowModal = (function(_super) {
                 inputElements[col.name] = input_1;
             }
         }
-
+        
         var btnDiv = contentEl.createDiv({ cls: "sqlite-manager-form-actions" });
         var saveBtn = btnDiv.createEl("button", { text: "保存", cls: "mod-cta" });
         saveBtn.addEventListener("click", function(e) {
@@ -506,7 +462,9 @@ var EditRowModal = (function(_super) {
         var cancelBtn = btnDiv.createEl("button", { text: "取消" });
         cancelBtn.addEventListener("click", function() { _this.close(); });
     };
-    EditRowModal.prototype.onClose = function() { this.contentEl.empty(); };
+    EditRowModal.prototype.onClose = function() {
+        this.contentEl.empty();
+    };
     return EditRowModal;
 })(obsidian.Modal);
 
@@ -527,17 +485,22 @@ var ConfirmDeleteModal = (function(_super) {
         var contentEl = this.contentEl;
         contentEl.empty();
         contentEl.addClass("sqlite-manager-modal");
-
+        
         contentEl.createEl("h2", { text: "确认删除" });
         contentEl.createEl("p", { text: this.message, cls: "sqlite-manager-confirm-text" });
-
+        
         var btnDiv = contentEl.createDiv({ cls: "sqlite-manager-form-actions" });
         var deleteBtn = btnDiv.createEl("button", { text: "删除", cls: "mod-warning" });
-        deleteBtn.addEventListener("click", function() { _this.onConfirm(); _this.close(); });
+        deleteBtn.addEventListener("click", function() {
+            _this.onConfirm();
+            _this.close();
+        });
         var cancelBtn = btnDiv.createEl("button", { text: "取消" });
         cancelBtn.addEventListener("click", function() { _this.close(); });
     };
-    ConfirmDeleteModal.prototype.onClose = function() { this.contentEl.empty(); };
+    ConfirmDeleteModal.prototype.onClose = function() {
+        this.contentEl.empty();
+    };
     return ConfirmDeleteModal;
 })(obsidian.Modal);
 
@@ -559,9 +522,9 @@ var JsonDetailModal = (function(_super) {
         contentEl.empty();
         contentEl.addClass("sqlite-manager-modal");
         contentEl.addClass("sqlite-manager-json-modal");
-
+        
         contentEl.createEl("h2", { text: this.fieldName + " - 详细视图" });
-
+        
         if (isTableLikeJson(this.jsonData)) {
             this.renderTableLikeJson(contentEl, this.jsonData);
         } else if (typeof this.jsonData === "object" && this.jsonData !== null) {
@@ -572,12 +535,12 @@ var JsonDetailModal = (function(_super) {
                 cls: "sqlite-manager-json-pre"
             });
         }
-
+        
         var btnDiv = contentEl.createDiv({ cls: "sqlite-manager-form-actions" });
         var closeBtn = btnDiv.createEl("button", { text: "关闭" });
         closeBtn.addEventListener("click", function() { _this.close(); });
     };
-
+    
     JsonDetailModal.prototype.renderTableLikeJson = function(container, data) {
         var _this = this;
         if (data.length === 0) {
@@ -592,10 +555,10 @@ var JsonDetailModal = (function(_super) {
             }
         }
         var columns = Array.from(keys);
-
+        
         var wrap = container.createDiv({ cls: "sqlite-manager-json-table-wrap" });
         var table = wrap.createEl("table", { cls: "sqlite-manager-json-table" });
-
+        
         var thead = table.createEl("thead");
         var headerRow = thead.createEl("tr");
         headerRow.createEl("th", { text: "#" });
@@ -603,7 +566,7 @@ var JsonDetailModal = (function(_super) {
             var col = columns_1[_a];
             headerRow.createEl("th", { text: col });
         }
-
+        
         var tbody = table.createEl("tbody");
         for (var i = 0; i < data.length; i++) {
             var row = data[i];
@@ -635,13 +598,13 @@ var JsonDetailModal = (function(_super) {
                 }
             }
         }
-
+        
         container.createEl("div", {
             cls: "sqlite-manager-json-summary",
             text: "共 " + data.length + " 条记录"
         });
     };
-
+    
     JsonDetailModal.prototype.renderObjectJson = function(container, data) {
         var _this = this;
         var wrap = container.createDiv({ cls: "sqlite-manager-json-kv-wrap" });
@@ -670,11 +633,15 @@ var JsonDetailModal = (function(_super) {
             }
         };
         for (var key in data) {
-            if (data.hasOwnProperty(key)) _loop_1(key);
+            if (data.hasOwnProperty(key)) {
+                _loop_1(key);
+            }
         }
     };
-
-    JsonDetailModal.prototype.onClose = function() { this.contentEl.empty(); };
+    
+    JsonDetailModal.prototype.onClose = function() {
+        this.contentEl.empty();
+    };
     return JsonDetailModal;
 })(obsidian.Modal);
 
@@ -686,7 +653,7 @@ var VIEW_TYPE_SQLITE_MANAGER = "sqlite-manager-view";
 
 var SqliteManagerView = (function(_super) {
     __extends(SqliteManagerView, _super);
-
+    
     function SqliteManagerView(leaf, plugin) {
         var _this = _super.call(this, leaf) || this;
         _this.plugin = plugin;
@@ -699,94 +666,138 @@ var SqliteManagerView = (function(_super) {
         _this.searchQuery = "";
         return _this;
     }
-
-    SqliteManagerView.prototype.getViewType = function() { return VIEW_TYPE_SQLITE_MANAGER; };
+    
+    SqliteManagerView.prototype.getViewType = function() {
+        return VIEW_TYPE_SQLITE_MANAGER;
+    };
+    
     SqliteManagerView.prototype.getDisplayText = function() {
         return this.currentFile ? "SQLite: " + this.currentFile : "SQLite Manager";
     };
-    SqliteManagerView.prototype.getIcon = function() { return "database"; };
-    SqliteManagerView.prototype.onOpen = function() { this.renderView(); };
-    SqliteManagerView.prototype.onClose = function() { this.closeDatabase(); };
-
+    
+    SqliteManagerView.prototype.getIcon = function() {
+        return "database";
+    };
+    
+    SqliteManagerView.prototype.onOpen = function() {
+        this.renderView();
+    };
+    
+    SqliteManagerView.prototype.onClose = function() {
+        this.closeDatabase();
+    };
+    
     SqliteManagerView.prototype.closeDatabase = function() {
-        if (this.db) { this.db.close(); this.db = null; }
+        if (this.db) {
+            this.db.close();
+            this.db = null;
+        }
         this.currentFile = null;
         this.currentTable = null;
         this.currentData = null;
     };
-
+    
     SqliteManagerView.prototype.openDbFile = function(filePath) {
         var _this = this;
         this.closeDatabase();
+        
         getSqlJs(this.plugin.settings.wasmPath).then(function(SQL) {
-            var file = _this.app.vault.getAbstractFileByPath(filePath);
-            if (!file || !(file instanceof obsidian.TFile)) {
-                new obsidian.Notice("找不到文件: " + filePath);
-                return;
-            }
-            _this.app.vault.readBinary(file).then(function(buffer) {
-                try {
-                    _this.db = new SQL.Database(new Uint8Array(buffer));
-                    _this.currentFile = filePath;
-                    _this.currentTable = null;
-                    _this.currentData = null;
-                    _this.renderView();
-                } catch (err) {
-                    new obsidian.Notice("打开数据库失败: " + err.message);
+            try {
+                var file = _this.app.vault.getAbstractFileByPath(filePath);
+                if (!file || !(file instanceof obsidian.TFile)) {
+                    new obsidian.Notice("找不到文件: " + filePath);
+                    return;
                 }
-            });
+                _this.app.vault.readBinary(file).then(function(buffer) {
+                    try {
+                        _this.db = new SQL.Database(new Uint8Array(buffer));
+                        _this.currentFile = filePath;
+                        _this.currentTable = null;
+                        _this.currentData = null;
+                        _this.renderView();
+                    } catch (err) {
+                        new obsidian.Notice("打开数据库失败: " + err.message);
+                        console.error("打开数据库失败:", err);
+                    }
+                });
+            } catch (err) {
+                new obsidian.Notice("打开数据库失败: " + err.message);
+                console.error("打开数据库失败:", err);
+            }
         }).catch(function(err) {
             new obsidian.Notice("加载SQL引擎失败: " + err.message);
             console.error("加载SQL引擎失败:", err);
         });
     };
-
+    
     SqliteManagerView.prototype.renderView = function() {
         var container = this.containerEl.children[1];
         container.empty();
         container.addClass("sqlite-manager");
+        
         this.renderToolbar(container);
-        if (!this.db) { this.renderEmptyState(container); return; }
+        
+        if (!this.db) {
+            this.renderEmptyState(container);
+            return;
+        }
+        
         this.renderTableSelector(container);
-        if (this.currentTable && this.currentData) { this.renderDataTable(container); }
+        
+        if (this.currentTable && this.currentData) {
+            this.renderDataTable(container);
+        }
     };
-
+    
     SqliteManagerView.prototype.renderToolbar = function(container) {
         var _this = this;
         var toolbar = container.createDiv({ cls: "sqlite-manager-toolbar" });
+        
         var fileLabel = toolbar.createDiv({ cls: "sqlite-manager-file-label" });
         fileLabel.textContent = this.currentFile ? "📁 " + this.currentFile : "未打开数据库";
-
+        
         var btnGroup = toolbar.createDiv({ cls: "sqlite-manager-toolbar-btns" });
-        var openBtn = btnGroup.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "打开数据库文件" } });
+        
+        var openBtn = btnGroup.createEl("button", {
+            cls: "clickable-icon",
+            attr: { "aria-label": "打开数据库文件" }
+        });
         openBtn.innerHTML = "📂 打开";
         openBtn.addEventListener("click", function() { _this.pickDbFile(); });
-
+        
         if (this.db) {
-            var refreshBtn = btnGroup.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "刷新数据" } });
+            var refreshBtn = btnGroup.createEl("button", {
+                cls: "clickable-icon",
+                attr: { "aria-label": "刷新数据" }
+            });
             refreshBtn.innerHTML = "🔄 刷新";
             refreshBtn.addEventListener("click", function() { _this.refreshData(); });
-            var saveBtn = btnGroup.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "保存数据库" } });
+            
+            var saveBtn = btnGroup.createEl("button", {
+                cls: "clickable-icon",
+                attr: { "aria-label": "保存数据库" }
+            });
             saveBtn.innerHTML = "💾 保存";
             saveBtn.addEventListener("click", function() { _this.saveDatabase(); });
         }
     };
-
+    
     SqliteManagerView.prototype.renderEmptyState = function(container) {
         var _this = this;
         var empty = container.createDiv({ cls: "sqlite-manager-empty" });
         empty.createEl("div", { cls: "sqlite-manager-empty-icon", text: "🗄️" });
         empty.createEl("h3", { text: "SQLite Manager" });
         empty.createEl("p", { text: "点击「打开」按钮选择一个 .db 文件，或使用命令面板打开数据库。" });
+        
         var openBtn = empty.createEl("button", { text: "📂 打开数据库文件", cls: "mod-cta" });
         openBtn.addEventListener("click", function() { _this.pickDbFile(); });
     };
-
+    
     SqliteManagerView.prototype.renderTableSelector = function(container) {
         var _this = this;
         var selector = container.createDiv({ cls: "sqlite-manager-table-selector" });
         var tables = getTables(this.db);
-
+        
         var dropdownWrap = selector.createDiv({ cls: "sqlite-manager-dropdown-wrap" });
         dropdownWrap.createEl("span", { cls: "sqlite-manager-selector-label", text: "表:" });
         var dropdown = dropdownWrap.createEl("select", { cls: "sqlite-manager-dropdown" });
@@ -794,13 +805,15 @@ var SqliteManagerView = (function(_super) {
         for (var _i = 0, tables_1 = tables; _i < tables_1.length; _i++) {
             var table = tables_1[_i];
             var opt = dropdown.createEl("option", { text: table, attr: { value: table } });
-            if (table === this.currentTable) opt.selected = true;
+            if (table === this.currentTable) {
+                opt.selected = true;
+            }
         }
         dropdown.addEventListener("change", function() {
             var val = dropdown.value;
             if (val) _this.selectTable(val);
         });
-
+        
         var searchWrap = selector.createDiv({ cls: "sqlite-manager-search-wrap" });
         var searchInput = searchWrap.createEl("input", {
             cls: "sqlite-manager-search-input",
@@ -810,13 +823,13 @@ var SqliteManagerView = (function(_super) {
             _this.searchQuery = searchInput.value;
             if (_this.currentTable) _this.renderView();
         });
-
+        
         if (this.currentTable) {
             var count = getRowCount(this.db, this.currentTable);
             selector.createDiv({ cls: "sqlite-manager-row-count", text: "共 " + count + " 行" });
         }
     };
-
+    
     SqliteManagerView.prototype.selectTable = function(tableName) {
         this.currentTable = tableName;
         this.sortColumn = null;
@@ -825,54 +838,71 @@ var SqliteManagerView = (function(_super) {
         this.currentData = getTableData(this.db, tableName, this.plugin.settings.previewLimit);
         this.renderView();
     };
-
+    
     SqliteManagerView.prototype.refreshData = function() {
-        if (this.currentFile) this.openDbFile(this.currentFile);
+        var _this = this;
+        if (this.currentFile) {
+            this.openDbFile(this.currentFile);
+            // After opening, we need to re-select the table
+            // openDbFile calls renderView which will re-render
+        }
     };
-
+    
     SqliteManagerView.prototype.renderDataTable = function(container) {
         var _this = this;
         if (!this.currentData || !this.currentTable) return;
-
+        
         var rows = this.currentData.rows.slice();
-
+        
         // Search filter
         if (this.searchQuery) {
             var query_1 = this.searchQuery.toLowerCase();
             rows = rows.filter(function(row) {
-                return Object.values(row).some(function(v) { return String(v).toLowerCase().includes(query_1); });
+                return Object.values(row).some(function(v) {
+                    return String(v).toLowerCase().includes(query_1);
+                });
             });
         }
-
+        
         // Sort
         if (this.sortColumn) {
             var sortCol_1 = this.sortColumn;
             var sortDir_1 = this.sortDirection;
             rows.sort(function(a, b) {
-                var va = a[sortCol_1], vb = b[sortCol_1];
+                var va = a[sortCol_1];
+                var vb = b[sortCol_1];
                 if (va === null || va === undefined) return 1;
                 if (vb === null || vb === undefined) return -1;
-                var cmp = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb));
+                var cmp = typeof va === "number" && typeof vb === "number"
+                    ? va - vb
+                    : String(va).localeCompare(String(vb));
                 return sortDir_1 === "asc" ? cmp : -cmp;
             });
         }
-
+        
         // Action buttons
         var actionsBar = container.createDiv({ cls: "sqlite-manager-actions" });
-        var addBtn = actionsBar.createEl("button", { cls: "sqlite-manager-btn sqlite-manager-btn-add", text: "➕ 新增记录" });
+        var addBtn = actionsBar.createEl("button", {
+            cls: "sqlite-manager-btn sqlite-manager-btn-add",
+            text: "➕ 新增记录"
+        });
         addBtn.addEventListener("click", function() { _this.addRow(); });
-        var exportBtn = actionsBar.createEl("button", { cls: "sqlite-manager-btn sqlite-manager-btn-export", text: "📋 复制为JSON" });
+        
+        var exportBtn = actionsBar.createEl("button", {
+            cls: "sqlite-manager-btn sqlite-manager-btn-export",
+            text: "📋 复制为JSON"
+        });
         exportBtn.addEventListener("click", function() { _this.copyAsJson(rows); });
-
+        
         // Table
         var tableWrap = container.createDiv({ cls: "sqlite-manager-table-wrap" });
         var table = tableWrap.createEl("table", { cls: "sqlite-manager-table" });
-
+        
         // Header
         var thead = table.createEl("thead");
         var headerRow = thead.createEl("tr");
         headerRow.createEl("th", { text: "操作", cls: "sqlite-manager-th-actions" });
-
+        
         for (var _i = 0, _a = this.currentData.columns; _i < _a.length; _i++) {
             var col = _a[_i];
             var th = headerRow.createEl("th", { cls: "sqlite-manager-th-sortable" });
@@ -880,12 +910,14 @@ var SqliteManagerView = (function(_super) {
             var labelDiv = thWrap.createDiv({ cls: "sqlite-manager-th-labels" });
             labelDiv.createDiv({ cls: "sqlite-manager-th-label", text: col.name });
             labelDiv.createDiv({ cls: "sqlite-manager-th-type", text: col.type || "TEXT" });
+            
             if (this.sortColumn === col.name) {
                 thWrap.createDiv({
                     cls: "sqlite-manager-sort-icon active " + this.sortDirection,
                     text: this.sortDirection === "asc" ? "▲" : "▼"
                 });
             }
+            
             (function(colName) {
                 th.addEventListener("click", function() {
                     if (_this.sortColumn === colName) {
@@ -898,24 +930,38 @@ var SqliteManagerView = (function(_super) {
                 });
             })(col.name);
         }
-
+        
         // Body
         var tbody = table.createEl("tbody");
         for (var i = 0; i < rows.length; i++) {
             var row = rows[i];
             var tr = tbody.createEl("tr");
-
+            
+            // Action column
             var actionTd = tr.createEl("td", { cls: "sqlite-manager-td-actions" });
-            var editBtn = actionTd.createEl("button", { cls: "sqlite-manager-row-btn edit", text: "✏️", attr: { title: "编辑" } });
-            (function(r) { editBtn.addEventListener("click", function() { _this.editRow(r); }); })(row);
-            var deleteBtn = actionTd.createEl("button", { cls: "sqlite-manager-row-btn delete", text: "🗑️", attr: { title: "删除" } });
-            (function(r) { deleteBtn.addEventListener("click", function() { _this.deleteRow(r); }); })(row);
-
+            var editBtn = actionTd.createEl("button", {
+                cls: "sqlite-manager-row-btn edit",
+                text: "✏️",
+                attr: { title: "编辑" }
+            });
+            (function(row) {
+                editBtn.addEventListener("click", function() { _this.editRow(row); });
+            })(row);
+            var deleteBtn = actionTd.createEl("button", {
+                cls: "sqlite-manager-row-btn delete",
+                text: "🗑️",
+                attr: { title: "删除" }
+            });
+            (function(row) {
+                deleteBtn.addEventListener("click", function() { _this.deleteRow(row); });
+            })(row);
+            
+            // Data columns
             for (var _b = 0, _c = this.currentData.columns; _b < _c.length; _b++) {
                 var col = _c[_b];
                 var td = tr.createEl("td");
                 var value = row[col.name];
-
+                
                 if (value === null || value === undefined) {
                     td.createSpan({ cls: "sqlite-manager-null", text: "NULL" });
                 } else {
@@ -927,8 +973,10 @@ var SqliteManagerView = (function(_super) {
                             cls: "sqlite-manager-json-btn",
                             text: "📋 {" + Object.keys(parsed).length + "项}"
                         });
-                        (function(colName, pd) {
-                            btn.addEventListener("click", function() { new JsonDetailModal(_this.app, colName, pd).open(); });
+                        (function(colName, parsedData) {
+                            btn.addEventListener("click", function() {
+                                new JsonDetailModal(_this.app, colName, parsedData).open();
+                            });
                         })(col.name, parsed);
                     } else if (parsed !== null && Array.isArray(parsed) && parsed.length === 0) {
                         td.createSpan({ cls: "sqlite-manager-empty-array", text: "[]" });
@@ -940,16 +988,23 @@ var SqliteManagerView = (function(_super) {
                         if (strVal.length > 50) {
                             td.textContent = strVal.substring(0, 50) + "...";
                             td.addClass("sqlite-manager-cell-truncated");
-                            (function(ft) { td.addEventListener("click", function() { new obsidian.Notice(ft, 5000); }); })(strVal);
+                            (function(fullText) {
+                                td.addEventListener("click", function() {
+                                    new obsidian.Notice(fullText, 5000);
+                                });
+                            })(strVal);
                         } else {
                             td.textContent = strVal;
                         }
-                        if (typeof value === "number") td.addClass("sqlite-manager-cell-num");
+                        if (typeof value === "number") {
+                            td.addClass("sqlite-manager-cell-num");
+                        }
                     }
                 }
             }
         }
-
+        
+        // No data state
         if (rows.length === 0) {
             var emptyRow = tbody.createEl("tr");
             var emptyCell = emptyRow.createEl("td", {
@@ -959,18 +1014,22 @@ var SqliteManagerView = (function(_super) {
             emptyCell.textContent = this.searchQuery ? "没有匹配的数据" : "表中暂无数据";
         }
     };
-
+    
     SqliteManagerView.prototype.renderInlineJsonTable = function(td, fieldName, data) {
         var _this = this;
         var wrapper = td.createDiv({ cls: "sqlite-manager-inline-json" });
+        
         var header = wrapper.createDiv({ cls: "sqlite-manager-inline-json-header" });
         header.createSpan({ text: data.length + "条", cls: "sqlite-manager-inline-json-count" });
-        var expandBtn = header.createEl("button", { cls: "sqlite-manager-inline-json-expand", text: "展开" });
+        var expandBtn = header.createEl("button", {
+            cls: "sqlite-manager-inline-json-expand",
+            text: "展开"
+        });
         expandBtn.addEventListener("click", function(e) {
             e.stopPropagation();
             new JsonDetailModal(_this.app, fieldName, data).open();
         });
-
+        
         if (data.length > 0 && typeof data[0] === "object") {
             var allKeys = new Set();
             for (var _i = 0, data_2 = data; _i < data_2.length; _i++) {
@@ -979,12 +1038,15 @@ var SqliteManagerView = (function(_super) {
             }
             var keys = Array.from(allKeys).slice(0, 4);
             var showRows = data.slice(0, 3);
-
+            
             var miniTable = wrapper.createEl("table", { cls: "sqlite-manager-mini-table" });
             var thead = miniTable.createEl("thead");
             var headerRow = thead.createEl("tr");
-            for (var _a = 0, keys_1 = keys; _a < keys_1.length; _a++) { headerRow.createEl("th", { text: keys_1[_a] }); }
-
+            for (var _a = 0, keys_1 = keys; _a < keys_1.length; _a++) {
+                var key = keys_1[_a];
+                headerRow.createEl("th", { text: key });
+            }
+            
             var tbody = miniTable.createEl("tbody");
             for (var _b = 0, showRows_1 = showRows; _b < showRows_1.length; _b++) {
                 var item = showRows_1[_b];
@@ -996,11 +1058,13 @@ var SqliteManagerView = (function(_super) {
                     if (val === null || val === undefined) {
                         cell.createSpan({ cls: "sqlite-manager-null", text: "-" });
                     } else {
-                        cell.textContent = String(val).length > 15 ? String(val).substring(0, 15) + "..." : String(val);
+                        cell.textContent = String(val).length > 15
+                            ? String(val).substring(0, 15) + "..."
+                            : String(val);
                     }
                 }
             }
-
+            
             if (data.length > 3) {
                 var moreRow = tbody.createEl("tr", { cls: "sqlite-manager-more-row" });
                 var moreCell = moreRow.createEl("td", { attr: { colspan: String(keys.length) } });
@@ -1008,9 +1072,11 @@ var SqliteManagerView = (function(_super) {
             }
         }
     };
-
+    
+    // ============================================================
     // CRUD Operations
-
+    // ============================================================
+    
     SqliteManagerView.prototype.saveDatabase = function() {
         var _this = this;
         if (!this.db || !this.currentFile) {
@@ -1019,7 +1085,7 @@ var SqliteManagerView = (function(_super) {
         }
         try {
             var data = this.db.export();
-            var buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+            var buffer = Buffer.from(data);
             var file = this.app.vault.getAbstractFileByPath(this.currentFile);
             if (file && file instanceof obsidian.TFile) {
                 this.app.vault.modifyBinary(file, buffer).then(function() {
@@ -1028,146 +1094,195 @@ var SqliteManagerView = (function(_super) {
             }
         } catch (err) {
             new obsidian.Notice("保存失败: " + err.message);
+            console.error("保存失败:", err);
         }
     };
-
+    
     SqliteManagerView.prototype.editRow = function(row) {
         var _this = this;
         if (!this.db || !this.currentTable || !this.currentData) return;
-        var modal = new EditRowModal(this.app, this.currentData.columns, row, function(newData) {
-            try {
-                var pkColumns = _this.currentData.columns.filter(function(c) { return c.pk === 1; });
-                if (pkColumns.length === 0) {
-                    new obsidian.Notice("该表没有主键，无法编辑");
-                    return;
+        
+        var modal = new EditRowModal(
+            this.app,
+            this.currentData.columns,
+            row,
+            function(newData) {
+                try {
+                    var pkColumns = _this.currentData.columns.filter(function(c) { return c.pk === 1; });
+                    var setClauses = [];
+                    var values = [];
+                    
+                    for (var _i = 0, _a = _this.currentData.columns; _i < _a.length; _i++) {
+                        var col = _a[_i];
+                        if (col.pk === 1) continue;
+                        setClauses.push('"' + col.name + '" = ?');
+                        values.push(prepareValue(newData[col.name], col));
+                    }
+                    
+                    var whereClauses = pkColumns.map(function(col) { return '"' + col.name + '" = ?'; });
+                    var whereValues = pkColumns.map(function(col) { return row[col.name]; });
+                    
+                    var sql = 'UPDATE "' + _this.currentTable + '" SET ' + setClauses.join(", ") + ' WHERE ' + whereClauses.join(" AND ");
+                    _this.db.run(sql, values.concat(whereValues));
+                    
+                    new obsidian.Notice("记录已更新（请保存数据库以持久化更改）");
+                    _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
+                    _this.renderView();
+                } catch (err) {
+                    new obsidian.Notice("更新失败: " + err.message);
+                    console.error("更新失败:", err);
                 }
-                var setClauses = [];
-                var values = [];
-                for (var _i = 0, _a = _this.currentData.columns; _i < _a.length; _i++) {
-                    var col = _a[_i];
-                    if (col.pk === 1) continue;
-                    setClauses.push('"' + col.name + '" = ?');
-                    values.push(prepareValue(newData[col.name], col));
-                }
-                var whereClauses = pkColumns.map(function(col) { return '"' + col.name + '" = ?'; });
-                var whereValues = pkColumns.map(function(col) { return row[col.name]; });
-                var allValues = values.concat(whereValues);
-                var sql = 'UPDATE "' + _this.currentTable + '" SET ' + setClauses.join(", ") + ' WHERE ' + whereClauses.join(" AND ");
-                console.log("[SQLite Manager] UPDATE SQL:", sql);
-                console.log("[SQLite Manager] UPDATE Values:", allValues);
-                executeSql(_this.db, sql, allValues);
-                new obsidian.Notice("记录已更新（请保存数据库以持久化更改）");
-                _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
-                _this.renderView();
-            } catch (err) {
-                console.error("[SQLite Manager] Update error:", err);
-                new obsidian.Notice("更新失败: " + err.message);
-            }
-        }, true);
+            },
+            true
+        );
         modal.open();
     };
-
+    
     SqliteManagerView.prototype.deleteRow = function(row) {
         var _this = this;
         if (!this.db || !this.currentTable || !this.currentData) return;
+        
         var pkColumns = this.currentData.columns.filter(function(c) { return c.pk === 1; });
-        if (pkColumns.length === 0) {
-            new obsidian.Notice("该表没有主键，无法删除");
-            return;
-        }
         var pkValues = pkColumns.map(function(col) { return col.name + "=" + row[col.name]; }).join(", ");
-        var modal = new ConfirmDeleteModal(this.app, "确定要删除这条记录吗？\n" + pkValues, function() {
-            try {
-                var whereClauses = pkColumns.map(function(col) { return '"' + col.name + '" = ?'; });
-                var whereValues = pkColumns.map(function(col) { return row[col.name]; });
-                var sql = 'DELETE FROM "' + _this.currentTable + '" WHERE ' + whereClauses.join(" AND ");
-                console.log("[SQLite Manager] DELETE SQL:", sql);
-                console.log("[SQLite Manager] DELETE Values:", whereValues);
-                executeSql(_this.db, sql, whereValues);
-                new obsidian.Notice("记录已删除（请保存数据库以持久化更改）");
-                _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
-                _this.renderView();
-            } catch (err) {
-                console.error("[SQLite Manager] Delete error:", err);
-                new obsidian.Notice("删除失败: " + err.message);
+        
+        var modal = new ConfirmDeleteModal(
+            this.app,
+            "确定要删除这条记录吗？\n" + pkValues,
+            function() {
+                try {
+                    var whereClauses = pkColumns.map(function(col) { return '"' + col.name + '" = ?'; });
+                    var whereValues = pkColumns.map(function(col) { return row[col.name]; });
+                    var sql = 'DELETE FROM "' + _this.currentTable + '" WHERE ' + whereClauses.join(" AND ");
+                    _this.db.run(sql, whereValues);
+                    
+                    new obsidian.Notice("记录已删除（请保存数据库以持久化更改）");
+                    _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
+                    _this.renderView();
+                } catch (err) {
+                    new obsidian.Notice("删除失败: " + err.message);
+                    console.error("删除失败:", err);
+                }
             }
-        });
+        );
         modal.open();
     };
-
+    
     SqliteManagerView.prototype.addRow = function() {
         var _this = this;
         if (!this.db || !this.currentTable || !this.currentData) return;
+        
         var emptyRow = {};
         for (var _i = 0, _a = this.currentData.columns; _i < _a.length; _i++) {
             var col = _a[_i];
             var isAutoIncrement = col.pk === 1 && col.type.toUpperCase() === "INTEGER";
             emptyRow[col.name] = isAutoIncrement ? null : (col.dflt_value || null);
         }
-        var modal = new EditRowModal(this.app, this.currentData.columns, emptyRow, function(newData) {
-            try {
-                var insertColumns = [];
-                var insertValues = [];
-                var placeholders = [];
-                for (var _i = 0, _a = _this.currentData.columns; _i < _a.length; _i++) {
-                    var col = _a[_i];
-                    var isAutoIncrement = col.pk === 1 && col.type.toUpperCase() === "INTEGER";
-                    if (isAutoIncrement && newData[col.name] === null) continue;
-                    if (newData[col.name] === null || newData[col.name] === undefined || newData[col.name] === "") {
-                        if (col.notnull && col.dflt_value === null) {
-                            new obsidian.Notice(col.name + " 不能为空");
-                            return;
+        
+        var modal = new EditRowModal(
+            this.app,
+            this.currentData.columns,
+            emptyRow,
+            function(newData) {
+                try {
+                    var insertColumns = [];
+                    var insertValues = [];
+                    var placeholders = [];
+                    
+                    for (var _i = 0, _a = _this.currentData.columns; _i < _a.length; _i++) {
+                        var col = _a[_i];
+                        var isAutoIncrement = col.pk === 1 && col.type.toUpperCase() === "INTEGER";
+                        if (isAutoIncrement && newData[col.name] === null) continue;
+                        
+                        if (newData[col.name] === null || newData[col.name] === undefined || newData[col.name] === "") {
+                            if (col.notnull && col.dflt_value === null) {
+                                new obsidian.Notice(col.name + " 不能为空");
+                                return;
+                            }
+                            if (!col.notnull) {
+                                insertColumns.push('"' + col.name + '"');
+                                placeholders.push("NULL");
+                                continue;
+                            }
                         }
-                        if (!col.notnull) {
-                            insertColumns.push('"' + col.name + '"');
-                            placeholders.push("NULL");
-                            continue;
-                        }
+                        insertColumns.push('"' + col.name + '"');
+                        placeholders.push("?");
+                        insertValues.push(prepareValue(newData[col.name], col));
                     }
-                    insertColumns.push('"' + col.name + '"');
-                    placeholders.push("?");
-                    insertValues.push(prepareValue(newData[col.name], col));
+                    
+                    var sql = 'INSERT INTO "' + _this.currentTable + '" (' + insertColumns.join(", ") + ') VALUES (' + placeholders.join(", ") + ')';
+                    _this.db.run(sql, insertValues);
+                    
+                    new obsidian.Notice("记录已添加（请保存数据库以持久化更改）");
+                    _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
+                    _this.renderView();
+                } catch (err) {
+                    new obsidian.Notice("新增失败: " + err.message);
+                    console.error("新增失败:", err);
                 }
-                var sql = 'INSERT INTO "' + _this.currentTable + '" (' + insertColumns.join(", ") + ') VALUES (' + placeholders.join(", ") + ')';
-                console.log("[SQLite Manager] INSERT SQL:", sql);
-                console.log("[SQLite Manager] INSERT Values:", insertValues);
-                executeSql(_this.db, sql, insertValues);
-                new obsidian.Notice("记录已添加（请保存数据库以持久化更改）");
-                _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
-                _this.renderView();
-            } catch (err) {
-                new obsidian.Notice("新增失败: " + err.message);
-            }
-        }, false);
+            },
+            false
+        );
         modal.open();
     };
-
+    
     SqliteManagerView.prototype.copyAsJson = function(rows) {
-        navigator.clipboard.writeText(JSON.stringify(rows, null, 2)).then(function() {
+        var json = JSON.stringify(rows, null, 2);
+        navigator.clipboard.writeText(json).then(function() {
             new obsidian.Notice("已复制到剪贴板");
         });
     };
-
+    
     SqliteManagerView.prototype.pickDbFile = function() {
         var _this = this;
         var dbFiles = this.findDbFiles();
-        if (dbFiles.length === 0) { new obsidian.Notice("未找到 .db 文件"); return; }
-        if (dbFiles.length === 1) { this.openDbFile(dbFiles[0]); return; }
-        var modal = new DbFileSuggestModal(this.app, dbFiles, function(filePath) {
-            if (filePath) _this.openDbFile(filePath);
-        });
+        if (dbFiles.length === 0) {
+            new obsidian.Notice("未找到 .db 文件");
+            return;
+        }
+        if (dbFiles.length === 1) {
+            this.openDbFile(dbFiles[0]);
+            return;
+        }
+        var modal = new DbFileSuggestModal(
+            this.app,
+            dbFiles,
+            function(filePath) {
+                if (filePath) _this.openDbFile(filePath);
+            }
+        );
         modal.open();
     };
-
+    
     SqliteManagerView.prototype.findDbFiles = function() {
-        return this.app.vault.getFiles()
-            .filter(function(f) { return f.extension === "db" || f.extension === "sqlite" || f.extension === "sqlite3"; })
+        var files = this.app.vault.getFiles();
+        return files
+            .filter(function(f) {
+                return f.extension === "db" || f.extension === "sqlite" || f.extension === "sqlite3";
+            })
             .map(function(f) { return f.path; })
             .sort();
     };
-
+    
     return SqliteManagerView;
 })(obsidian.ItemView);
+
+// ============================================================
+// Helper for __extends
+// ============================================================
+
+function __extends(d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+}
+
+// Re-define classes with __extends available (move __extends to top)
+// Since __extends is now defined, let's just make sure the classes work.
+// Actually, __extends needs to be available before the class definitions.
+// Let me restructure by wrapping everything in a module.
+
+// NOTE: The __extends function and class definitions above need to be in correct order.
+// In the bundled output, __extends will be available. Let me verify.
 
 // ============================================================
 // Main Plugin Class
@@ -1175,32 +1290,35 @@ var SqliteManagerView = (function(_super) {
 
 var SqliteManagerPlugin = (function(_super) {
     __extends(SqliteManagerPlugin, _super);
-
+    
     function SqliteManagerPlugin(app, manifest) {
         var _this = _super.call(this, app, manifest) || this;
         _this.settings = { wasmPath: "", previewLimit: 200 };
         _this.view = null;
         return _this;
     }
-
+    
     SqliteManagerPlugin.prototype.onload = function() {
         var _this = this;
         this.loadSettings().then(function() {
+            // Register view
             _this.registerView(VIEW_TYPE_SQLITE_MANAGER, function(leaf) {
                 _this.view = new SqliteManagerView(leaf, _this);
                 return _this.view;
             });
-
+            
+            // Ribbon icon
             _this.addRibbonIcon("database", "打开 SQLite Manager", function() {
                 _this.activateView();
             });
-
+            
+            // Commands
             _this.addCommand({
                 id: "open-sqlite-manager",
                 name: "打开 SQLite Manager",
                 callback: function() { _this.activateView(); }
             });
-
+            
             _this.addCommand({
                 id: "open-database-file",
                 name: "打开数据库文件",
@@ -1210,45 +1328,38 @@ var SqliteManagerPlugin = (function(_super) {
                     });
                 }
             });
-
+            
+            // Settings tab
             _this.addSettingTab(new SqliteManagerSettingTab(_this.app, _this));
+            
+            // File extension support
             _this.registerExtensions(["db", "sqlite", "sqlite3"], VIEW_TYPE_SQLITE_MANAGER);
-
-            // Auto-open database when a .db file is clicked
-            _this.app.workspace.on("active-leaf-change", function(leaf) {
-                if (leaf && leaf.view && leaf.view.getViewType && leaf.view.getViewType() === VIEW_TYPE_SQLITE_MANAGER) {
-                    var view = leaf.view;
-                    if (view.currentFile === null && view.db === null) {
-                        // Try to get the file from the leaf's state
-                        var state = leaf.getViewState();
-                        if (state && state.state && state.state.file) {
-                            view.openDbFile(state.state.file);
-                        }
-                    }
-                }
-            });
         });
     };
-
+    
     SqliteManagerPlugin.prototype.onunload = function() {
-        if (this.view) this.view.closeDatabase();
+        if (this.view) {
+            this.view.closeDatabase();
+        }
     };
-
+    
     SqliteManagerPlugin.prototype.loadSettings = function() {
         var _this = this;
         return this.loadData().then(function(data) {
             _this.settings = Object.assign({}, { wasmPath: "", previewLimit: 200 }, data);
         });
     };
-
+    
     SqliteManagerPlugin.prototype.saveSettings = function() {
         return this.saveData(this.settings);
     };
-
+    
     SqliteManagerPlugin.prototype.activateView = function() {
+        var _this = this;
         var workspace = this.app.workspace;
-        var leaves = workspace.getLeavesOfType(VIEW_TYPE_SQLITE_MANAGER);
         var leaf = null;
+        var leaves = workspace.getLeavesOfType(VIEW_TYPE_SQLITE_MANAGER);
+        
         if (leaves.length > 0) {
             leaf = leaves[0];
         } else {
@@ -1257,10 +1368,14 @@ var SqliteManagerPlugin = (function(_super) {
                 leaf.setViewState({ type: VIEW_TYPE_SQLITE_MANAGER, active: true });
             }
         }
-        if (leaf) workspace.revealLeaf(leaf);
+        
+        if (leaf) {
+            workspace.revealLeaf(leaf);
+        }
+        
         return Promise.resolve();
     };
-
+    
     return SqliteManagerPlugin;
 })(obsidian.Plugin);
 
@@ -1270,19 +1385,20 @@ var SqliteManagerPlugin = (function(_super) {
 
 var SqliteManagerSettingTab = (function(_super) {
     __extends(SqliteManagerSettingTab, _super);
-
+    
     function SqliteManagerSettingTab(app, plugin) {
         var _this = _super.call(this, app, plugin) || this;
         _this.plugin = plugin;
         return _this;
     }
-
+    
     SqliteManagerSettingTab.prototype.display = function() {
         var _this = this;
         var containerEl = this.containerEl;
         containerEl.empty();
+        
         containerEl.createEl("h2", { text: "SQLite Manager 设置" });
-
+        
         new obsidian.Setting(containerEl)
             .setName("sql.js WASM 路径")
             .setDesc("sql.js 的 WASM 文件路径。留空则从 CDN 加载。")
@@ -1294,7 +1410,7 @@ var SqliteManagerSettingTab = (function(_super) {
                         _this.plugin.saveSettings();
                     });
             });
-
+        
         new obsidian.Setting(containerEl)
             .setName("预览行数限制")
             .setDesc("查看表数据时的最大行数")
@@ -1308,7 +1424,7 @@ var SqliteManagerSettingTab = (function(_super) {
                     });
             });
     };
-
+    
     return SqliteManagerSettingTab;
 })(obsidian.PluginSettingTab);
 
