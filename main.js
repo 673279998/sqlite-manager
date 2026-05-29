@@ -93,7 +93,7 @@ function getColumns(db, table) {
     var result = db.exec('PRAGMA table_info("' + table + '")');
     if (!result.length) return [];
     return result[0].values.map(function(v) {
-        return { name: v[1], type: v[2] || "", notnull: v[3], pk: v[4], dflt_value: v[5] };
+        return { name: v[1], type: v[2] || "", notnull: v[3], dflt_value: v[4], pk: v[5] };
     });
 }
 
@@ -133,6 +133,17 @@ function prepareValue(value, col) {
         return isNaN(num) ? null : num;
     }
     return String(value);
+}
+
+// Helper: execute a parameterized SQL statement
+// Uses db.run() which internally handles parameter binding correctly
+function executeSql(db, sql, params) {
+    if (params && params.length > 0) {
+        db.run(sql, params);
+    } else {
+        db.run(sql);
+    }
+    return true;
 }
 
 // ============================================================
@@ -798,6 +809,10 @@ var SqliteManagerView = (function(_super) {
         var modal = new EditRowModal(this.app, this.currentData.columns, row, function(newData) {
             try {
                 var pkColumns = _this.currentData.columns.filter(function(c) { return c.pk === 1; });
+                if (pkColumns.length === 0) {
+                    new obsidian.Notice("该表没有主键，无法编辑");
+                    return;
+                }
                 var setClauses = [];
                 var values = [];
                 for (var _i = 0, _a = _this.currentData.columns; _i < _a.length; _i++) {
@@ -808,15 +823,16 @@ var SqliteManagerView = (function(_super) {
                 }
                 var whereClauses = pkColumns.map(function(col) { return '"' + col.name + '" = ?'; });
                 var whereValues = pkColumns.map(function(col) { return row[col.name]; });
+                var allValues = values.concat(whereValues);
                 var sql = 'UPDATE "' + _this.currentTable + '" SET ' + setClauses.join(", ") + ' WHERE ' + whereClauses.join(" AND ");
-                var stmt = _this.db.prepare(sql);
-                stmt.bind(values.concat(whereValues));
-                stmt.step();
-                stmt.free();
+                console.log("[SQLite Manager] UPDATE SQL:", sql);
+                console.log("[SQLite Manager] UPDATE Values:", allValues);
+                executeSql(_this.db, sql, allValues);
                 new obsidian.Notice("记录已更新（请保存数据库以持久化更改）");
                 _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
                 _this.renderView();
             } catch (err) {
+                console.error("[SQLite Manager] Update error:", err);
                 new obsidian.Notice("更新失败: " + err.message);
             }
         }, true);
@@ -827,20 +843,24 @@ var SqliteManagerView = (function(_super) {
         var _this = this;
         if (!this.db || !this.currentTable || !this.currentData) return;
         var pkColumns = this.currentData.columns.filter(function(c) { return c.pk === 1; });
+        if (pkColumns.length === 0) {
+            new obsidian.Notice("该表没有主键，无法删除");
+            return;
+        }
         var pkValues = pkColumns.map(function(col) { return col.name + "=" + row[col.name]; }).join(", ");
         var modal = new ConfirmDeleteModal(this.app, "确定要删除这条记录吗？\n" + pkValues, function() {
             try {
                 var whereClauses = pkColumns.map(function(col) { return '"' + col.name + '" = ?'; });
                 var whereValues = pkColumns.map(function(col) { return row[col.name]; });
                 var sql = 'DELETE FROM "' + _this.currentTable + '" WHERE ' + whereClauses.join(" AND ");
-                var stmt = _this.db.prepare(sql);
-                stmt.bind(whereValues);
-                stmt.step();
-                stmt.free();
+                console.log("[SQLite Manager] DELETE SQL:", sql);
+                console.log("[SQLite Manager] DELETE Values:", whereValues);
+                executeSql(_this.db, sql, whereValues);
                 new obsidian.Notice("记录已删除（请保存数据库以持久化更改）");
                 _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
                 _this.renderView();
             } catch (err) {
+                console.error("[SQLite Manager] Delete error:", err);
                 new obsidian.Notice("删除失败: " + err.message);
             }
         });
@@ -881,10 +901,9 @@ var SqliteManagerView = (function(_super) {
                     insertValues.push(prepareValue(newData[col.name], col));
                 }
                 var sql = 'INSERT INTO "' + _this.currentTable + '" (' + insertColumns.join(", ") + ') VALUES (' + placeholders.join(", ") + ')';
-                var stmt = _this.db.prepare(sql);
-                stmt.bind(insertValues);
-                stmt.step();
-                stmt.free();
+                console.log("[SQLite Manager] INSERT SQL:", sql);
+                console.log("[SQLite Manager] INSERT Values:", insertValues);
+                executeSql(_this.db, sql, insertValues);
                 new obsidian.Notice("记录已添加（请保存数据库以持久化更改）");
                 _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
                 _this.renderView();

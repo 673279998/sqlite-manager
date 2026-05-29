@@ -78,8 +78,8 @@ function getColumns(db: Database, table: string): ColumnInfo[] {
 		name: v[1] as string,
 		type: (v[2] as string) || "",
 		notnull: v[3] as number,
-		pk: v[4] as number,
-		dflt_value: v[5] as string | null,
+		dflt_value: v[4] as string | null,
+		pk: v[5] as number,
 	}));
 }
 
