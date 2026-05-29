@@ -1118,7 +1118,10 @@ class SqliteManagerView extends ItemView {
 					const whereValues = pkColumns.map((col) => row[col.name]);
 
 					const sql = `UPDATE "${this.currentTable}" SET ${setClauses.join(", ")} WHERE ${whereClauses.join(" AND ")}`;
-					this.db!.run(sql, [...values, ...whereValues]);
+					const stmt = this.db!.prepare(sql);
+					stmt.bind([...values, ...whereValues]);
+					stmt.step();
+					stmt.free();
 
 					new Notice("记录已更新（请保存数据库以持久化更改）");
 					this.currentData = getTableData(
@@ -1156,7 +1159,10 @@ class SqliteManagerView extends ItemView {
 					const whereValues = pkColumns.map((col) => row[col.name]);
 
 					const sql = `DELETE FROM "${this.currentTable}" WHERE ${whereClauses.join(" AND ")}`;
-					this.db!.run(sql, whereValues);
+					const stmt = this.db!.prepare(sql);
+					stmt.bind(whereValues);
+					stmt.step();
+					stmt.free();
 
 					new Notice("记录已删除（请保存数据库以持久化更改）");
 					this.currentData = getTableData(
@@ -1224,7 +1230,10 @@ class SqliteManagerView extends ItemView {
 					}
 
 					const sql = `INSERT INTO "${this.currentTable}" (${insertColumns.join(", ")}) VALUES (${placeholders.join(", ")})`;
-					this.db!.run(sql, insertValues);
+					const stmt = this.db!.prepare(sql);
+					stmt.bind(insertValues);
+					stmt.step();
+					stmt.free();
 
 					new Notice("记录已添加（请保存数据库以持久化更改）");
 					this.currentData = getTableData(

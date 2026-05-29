@@ -809,7 +809,10 @@ var SqliteManagerView = (function(_super) {
                 var whereClauses = pkColumns.map(function(col) { return '"' + col.name + '" = ?'; });
                 var whereValues = pkColumns.map(function(col) { return row[col.name]; });
                 var sql = 'UPDATE "' + _this.currentTable + '" SET ' + setClauses.join(", ") + ' WHERE ' + whereClauses.join(" AND ");
-                _this.db.run(sql, values.concat(whereValues));
+                var stmt = _this.db.prepare(sql);
+                stmt.bind(values.concat(whereValues));
+                stmt.step();
+                stmt.free();
                 new obsidian.Notice("记录已更新（请保存数据库以持久化更改）");
                 _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
                 _this.renderView();
@@ -830,7 +833,10 @@ var SqliteManagerView = (function(_super) {
                 var whereClauses = pkColumns.map(function(col) { return '"' + col.name + '" = ?'; });
                 var whereValues = pkColumns.map(function(col) { return row[col.name]; });
                 var sql = 'DELETE FROM "' + _this.currentTable + '" WHERE ' + whereClauses.join(" AND ");
-                _this.db.run(sql, whereValues);
+                var stmt = _this.db.prepare(sql);
+                stmt.bind(whereValues);
+                stmt.step();
+                stmt.free();
                 new obsidian.Notice("记录已删除（请保存数据库以持久化更改）");
                 _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
                 _this.renderView();
@@ -875,7 +881,10 @@ var SqliteManagerView = (function(_super) {
                     insertValues.push(prepareValue(newData[col.name], col));
                 }
                 var sql = 'INSERT INTO "' + _this.currentTable + '" (' + insertColumns.join(", ") + ') VALUES (' + placeholders.join(", ") + ')';
-                _this.db.run(sql, insertValues);
+                var stmt = _this.db.prepare(sql);
+                stmt.bind(insertValues);
+                stmt.step();
+                stmt.free();
                 new obsidian.Notice("记录已添加（请保存数据库以持久化更改）");
                 _this.currentData = getTableData(_this.db, _this.currentTable, _this.plugin.settings.previewLimit);
                 _this.renderView();
