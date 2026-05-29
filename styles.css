@@ -1,0 +1,690 @@
+/* ============================================================
+   SQLite Manager - Styles
+   ============================================================ */
+
+/* Main container */
+.sqlite-manager {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 0;
+	gap: 0;
+	font-size: var(--font-ui-small);
+}
+
+/* Toolbar */
+.sqlite-manager-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	flex-wrap: wrap;
+}
+
+.sqlite-manager-file-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 300px;
+}
+
+.sqlite-manager-toolbar-btns {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.sqlite-manager-toolbar-btns button {
+	font-size: var(--font-ui-smaller);
+	padding: 4px 10px;
+	border-radius: 4px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+/* Empty state */
+.sqlite-manager-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	padding: 48px 24px;
+	text-align: center;
+}
+
+.sqlite-manager-empty-icon {
+	font-size: 48px;
+}
+
+.sqlite-manager-empty h3 {
+	margin: 0;
+	color: var(--text-normal);
+}
+
+.sqlite-manager-empty p {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	max-width: 400px;
+}
+
+/* Table selector */
+.sqlite-manager-table-selector {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	flex-wrap: wrap;
+}
+
+.sqlite-manager-dropdown-wrap {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.sqlite-manager-selector-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+
+.sqlite-manager-dropdown {
+	min-width: 160px;
+	padding: 4px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+}
+
+.sqlite-manager-search-wrap {
+	flex: 1;
+	min-width: 120px;
+}
+
+.sqlite-manager-search-input {
+	width: 100%;
+	padding: 4px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+}
+
+.sqlite-manager-row-count {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+
+/* Action buttons bar */
+.sqlite-manager-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.sqlite-manager-btn {
+	padding: 4px 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+
+.sqlite-manager-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.sqlite-manager-btn-add {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+}
+
+.sqlite-manager-btn-add:hover {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+/* Table container */
+.sqlite-manager-table-wrap {
+	overflow: auto;
+	flex: 1 1 auto;
+	min-height: 0;
+	background: var(--background-primary);
+}
+
+.sqlite-manager-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--font-ui-small);
+}
+
+.sqlite-manager-table th,
+.sqlite-manager-table td {
+	padding: 6px 10px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	border-right: 1px solid var(--background-modifier-border);
+	text-align: left;
+	vertical-align: top;
+	max-width: 400px;
+}
+
+.sqlite-manager-table th:last-child,
+.sqlite-manager-table td:last-child {
+	border-right: none;
+}
+
+.sqlite-manager-table th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: var(--background-primary);
+	border-bottom: 2px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 500;
+	user-select: none;
+}
+
+/* Sortable headers */
+.sqlite-manager-th-sortable {
+	cursor: pointer;
+	vertical-align: middle;
+}
+
+.sqlite-manager-th-sortable:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+.sqlite-manager-th-wrap {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.sqlite-manager-th-labels {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	flex: 1;
+	min-width: 0;
+}
+
+.sqlite-manager-th-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sqlite-manager-th-type {
+	font-size: 10px;
+	color: var(--text-faint);
+	font-weight: 400;
+	letter-spacing: 0.03em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sqlite-manager-sort-icon {
+	color: var(--text-faint);
+	font-size: 10px;
+	flex-shrink: 0;
+}
+
+.sqlite-manager-sort-icon.active {
+	color: var(--text-accent);
+}
+
+/* Action column */
+.sqlite-manager-th-actions,
+.sqlite-manager-td-actions {
+	width: 80px;
+	min-width: 80px;
+	text-align: center;
+	white-space: nowrap;
+}
+
+.sqlite-manager-row-btn {
+	padding: 2px 6px;
+	border: none;
+	border-radius: 3px;
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+	background: transparent;
+}
+
+.sqlite-manager-row-btn.edit:hover {
+	background: color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+}
+
+.sqlite-manager-row-btn.delete:hover {
+	background: color-mix(in srgb, var(--text-error) 20%, transparent);
+}
+
+/* Row hover */
+.sqlite-manager-table tbody tr:hover {
+	background: color-mix(in srgb, var(--interactive-hover) 14%, transparent);
+}
+
+/* NULL cells */
+.sqlite-manager-null {
+	display: inline-block;
+	padding: 1px 5px;
+	border-radius: 4px;
+	background: var(--background-modifier-border);
+	color: var(--text-faint);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+}
+
+/* Numeric cells */
+.sqlite-manager-cell-num {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	font-family: var(--font-monospace);
+}
+
+/* Truncated cells */
+.sqlite-manager-cell-truncated {
+	cursor: pointer;
+}
+
+.sqlite-manager-cell-truncated:hover {
+	color: var(--text-accent);
+}
+
+/* Array cells */
+.sqlite-manager-cell-array {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+/* Empty array */
+.sqlite-manager-empty-array {
+	color: var(--text-faint);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+}
+
+/* No data */
+.sqlite-manager-no-data {
+	text-align: center;
+	padding: 24px;
+	color: var(--text-muted);
+}
+
+/* JSON expand button */
+.sqlite-manager-json-btn {
+	padding: 2px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+
+.sqlite-manager-json-btn:hover {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+}
+
+/* Inline JSON table */
+.sqlite-manager-inline-json {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.sqlite-manager-inline-json-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.sqlite-manager-inline-json-count {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	font-weight: 500;
+}
+
+.sqlite-manager-inline-json-expand {
+	padding: 1px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 3px;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: 11px;
+}
+
+.sqlite-manager-inline-json-expand:hover {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+}
+
+/* Mini table (for inline JSON arrays) */
+.sqlite-manager-mini-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 11px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.sqlite-manager-mini-table th {
+	padding: 2px 6px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-weight: 500;
+	font-size: 10px;
+	text-transform: none;
+	letter-spacing: 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+	border-right: 1px solid var(--background-modifier-border);
+	position: static;
+}
+
+.sqlite-manager-mini-table th:last-child {
+	border-right: none;
+}
+
+.sqlite-manager-mini-table td {
+	padding: 2px 6px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	border-right: 1px solid var(--background-modifier-border);
+	vertical-align: top;
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sqlite-manager-mini-table td:last-child {
+	border-right: none;
+}
+
+.sqlite-manager-more-row td {
+	text-align: center;
+	color: var(--text-faint);
+	font-style: italic;
+	font-size: 10px;
+	padding: 2px 6px;
+}
+
+/* ============================================================
+   Modal Styles
+   ============================================================ */
+
+.sqlite-manager-modal .modal {
+	max-width: 700px;
+	width: 90vw;
+}
+
+.sqlite-manager-modal .modal-content {
+	max-height: 70vh;
+	overflow-y: auto;
+}
+
+/* Form */
+.sqlite-manager-form {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 12px 0;
+}
+
+.sqlite-manager-form-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.sqlite-manager-form-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--font-ui-small);
+	font-weight: 500;
+	color: var(--text-normal);
+}
+
+.sqlite-manager-badge {
+	display: inline-block;
+	padding: 1px 5px;
+	border-radius: 3px;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.03em;
+}
+
+.sqlite-manager-badge.pk {
+	background: color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+	color: var(--interactive-accent);
+	border: 1px solid var(--interactive-accent);
+}
+
+.sqlite-manager-badge.required {
+	background: color-mix(in srgb, var(--text-error) 15%, transparent);
+	color: var(--text-error);
+	border: 1px solid var(--text-error);
+}
+
+.sqlite-manager-type-hint {
+	color: var(--text-faint);
+	font-size: 10px;
+	font-family: var(--font-monospace);
+	font-weight: 400;
+	margin-left: auto;
+}
+
+.sqlite-manager-form-input {
+	width: 100%;
+	padding: 6px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-family: var(--font-default);
+}
+
+.sqlite-manager-form-input:focus {
+	border-color: var(--interactive-accent);
+	outline: none;
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+}
+
+.sqlite-manager-form-input.json-input {
+	font-family: var(--font-monospace);
+	min-height: 100px;
+	resize: vertical;
+	line-height: 1.4;
+}
+
+.sqlite-manager-form-input:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.sqlite-manager-form-btn-group {
+	display: flex;
+	gap: 6px;
+}
+
+.sqlite-manager-form-btn-group button {
+	padding: 2px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 3px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+}
+
+.sqlite-manager-form-btn-group button:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.sqlite-manager-form-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding-top: 16px;
+	border-top: 1px solid var(--background-modifier-border);
+	margin-top: 12px;
+}
+
+/* Confirm delete */
+.sqlite-manager-confirm-text {
+	padding: 8px 0;
+	color: var(--text-normal);
+	white-space: pre-line;
+	line-height: 1.5;
+}
+
+/* ============================================================
+   JSON Detail Modal
+   ============================================================ */
+
+.sqlite-manager-json-modal .modal {
+	max-width: 800px;
+	width: 90vw;
+}
+
+.sqlite-manager-json-modal .modal-content {
+	max-height: 75vh;
+	overflow-y: auto;
+}
+
+/* JSON table in modal */
+.sqlite-manager-json-table-wrap {
+	overflow: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+}
+
+.sqlite-manager-json-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--font-ui-small);
+}
+
+.sqlite-manager-json-table th,
+.sqlite-manager-json-table td {
+	padding: 6px 10px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	border-right: 1px solid var(--background-modifier-border);
+	text-align: left;
+	vertical-align: top;
+}
+
+.sqlite-manager-json-table th:last-child,
+.sqlite-manager-json-table td:last-child {
+	border-right: none;
+}
+
+.sqlite-manager-json-table th {
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 500;
+}
+
+.sqlite-manager-json-table tbody tr:hover {
+	background: color-mix(in srgb, var(--interactive-hover) 14%, transparent);
+}
+
+.sqlite-manager-row-num {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	text-align: center;
+	width: 30px;
+	min-width: 30px;
+}
+
+.sqlite-manager-json-expand-btn {
+	padding: 2px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+}
+
+.sqlite-manager-json-expand-btn:hover {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+}
+
+.sqlite-manager-json-summary {
+	padding: 8px 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-align: center;
+}
+
+/* JSON key-value view */
+.sqlite-manager-json-kv-wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 0;
+}
+
+.sqlite-manager-json-kv-row {
+	display: flex;
+	gap: 12px;
+	padding: 4px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.sqlite-manager-json-kv-key {
+	font-weight: 600;
+	color: var(--text-normal);
+	min-width: 120px;
+	white-space: nowrap;
+}
+
+.sqlite-manager-json-kv-value {
+	color: var(--text-muted);
+	word-break: break-word;
+	flex: 1;
+}
+
+.sqlite-manager-json-pre {
+	padding: 12px;
+	background: var(--background-secondary);
+	border-radius: 6px;
+	border: 1px solid var(--background-modifier-border);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	overflow-x: auto;
+	white-space: pre-wrap;
+	word-break: break-word;
+}

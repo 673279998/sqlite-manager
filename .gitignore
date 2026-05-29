@@ -1,0 +1,25 @@
+# Obsidian
+.trash/
+.obsidian/
+
+# Node
+node_modules/
+package-lock.json
+
+# Build output
+# main.js is included in releases, but not in the repo for development
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temp
+*.tmp
+*.temp
