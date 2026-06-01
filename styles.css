@@ -688,3 +688,199 @@
 	white-space: pre-wrap;
 	word-break: break-word;
 }
+
+/* ============================================================
+   JSON Table Editor (in Edit Modal)
+   ============================================================ */
+
+.sqlite-manager-json-editor {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.sqlite-manager-json-table-container {
+	overflow: auto;
+	max-height: 300px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+}
+
+.sqlite-manager-json-text-container {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.sqlite-manager-json-empty-hint {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	text-align: center;
+	padding: 12px;
+	font-style: italic;
+}
+
+.sqlite-manager-json-hidden-input {
+	display: none;
+}
+
+/* Editable table for JSON arrays */
+.sqlite-manager-edit-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--font-ui-small);
+}
+
+.sqlite-manager-edit-table th,
+.sqlite-manager-edit-table td {
+	padding: 4px 6px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	border-right: 1px solid var(--background-modifier-border);
+	text-align: left;
+	vertical-align: middle;
+}
+
+.sqlite-manager-edit-table th:last-child,
+.sqlite-manager-edit-table td:last-child {
+	border-right: none;
+}
+
+.sqlite-manager-edit-table th {
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 500;
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	white-space: nowrap;
+}
+
+.sqlite-manager-edit-th-num {
+	width: 30px;
+	min-width: 30px;
+	text-align: center;
+}
+
+.sqlite-manager-edit-th-col {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 80px;
+}
+
+.sqlite-manager-edit-th-col span {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.sqlite-manager-edit-del-col {
+	flex-shrink: 0;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--text-faint);
+	cursor: pointer;
+	font-size: 12px;
+	line-height: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.sqlite-manager-edit-del-col:hover {
+	background: color-mix(in srgb, var(--text-error) 20%, transparent);
+	color: var(--text-error);
+}
+
+.sqlite-manager-edit-th-action {
+	width: 36px;
+	min-width: 36px;
+	text-align: center;
+}
+
+.sqlite-manager-edit-td-num {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	text-align: center;
+	width: 30px;
+	min-width: 30px;
+}
+
+.sqlite-manager-edit-td-cell {
+	padding: 2px 4px;
+}
+
+.sqlite-manager-edit-cell-input {
+	width: 100%;
+	min-width: 60px;
+	padding: 3px 6px;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-family: var(--font-default);
+}
+
+.sqlite-manager-edit-cell-input:focus {
+	border-color: var(--interactive-accent);
+	outline: none;
+	background: var(--background-primary);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 15%, transparent);
+}
+
+.sqlite-manager-edit-cell-input:hover:not(:focus) {
+	border-color: var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.sqlite-manager-edit-td-action {
+	text-align: center;
+	width: 36px;
+	min-width: 36px;
+}
+
+.sqlite-manager-edit-del-row {
+	padding: 2px 4px;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--text-faint);
+	cursor: pointer;
+	font-size: 12px;
+}
+
+.sqlite-manager-edit-del-row:hover {
+	background: color-mix(in srgb, var(--text-error) 20%, transparent);
+	color: var(--text-error);
+}
+
+/* Table action buttons (add row, add column) */
+.sqlite-manager-json-table-actions {
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.sqlite-manager-json-table-actions button {
+	padding: 3px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+
+.sqlite-manager-json-table-actions button:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+	border-color: var(--interactive-accent);
+}

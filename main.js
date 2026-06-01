@@ -212,10 +212,229 @@ var EditRowModal = (function(_super) {
             typeHint.textContent = col.type || "TEXT";
 
             var value = this.rowData[col.name];
-            var isJsonField = typeof value === "string" &&
-                (value.trim().startsWith("[") || value.trim().startsWith("{"));
 
-            if (isJsonField) {
+            // Only detect JSON and show table editor when in edit mode
+            var isJsonField = false;
+            var parsedJson = null;
+            var isTableJson = false;
+
+            if (this.isEdit && typeof value === "string") {
+                var trimmed = value.trim();
+                if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+                    try {
+                        parsedJson = JSON.parse(trimmed);
+                        isJsonField = true;
+                        if (Array.isArray(parsedJson) && parsedJson.length > 0 && typeof parsedJson[0] === "object" && parsedJson[0] !== null) {
+                            isTableJson = true;
+                        }
+                    } catch (e) {
+                        // Not valid JSON, treat as normal string
+                    }
+                }
+            }
+
+            if (isTableJson) {
+                // Render as editable table for JSON array of objects
+                (function(colName, jsonData) {
+                    var editorWrap = fieldDiv.createDiv({ cls: "sqlite-manager-json-editor" });
+                    var tableContainer = editorWrap.createDiv({ cls: "sqlite-manager-json-table-container" });
+                    var textContainer = editorWrap.createDiv({ cls: "sqlite-manager-json-text-container", attr: { style: "display:none;" } });
+
+                    // Hidden input to store the final value
+                    var hiddenInput = fieldDiv.createEl("input", {
+                        cls: "sqlite-manager-json-hidden-input",
+                        attr: { type: "hidden" }
+                    });
+                    hiddenInput.value = JSON.stringify(jsonData);
+                    inputElements[colName] = hiddenInput;
+
+                    // --- Table editor ---
+                    var currentData = jsonData.map(function(item) { return Object.assign({}, item); });
+                    var allKeys = new Set();
+                    for (var k = 0; k < currentData.length; k++) {
+                        Object.keys(currentData[k]).forEach(function(key) { allKeys.add(key); });
+                    }
+                    var colKeys = Array.from(allKeys);
+
+                    function syncToHidden() {
+                        hiddenInput.value = JSON.stringify(currentData);
+                    }
+
+                    function renderTable() {
+                        tableContainer.empty();
+                        if (currentData.length === 0) {
+                            tableContainer.createEl("p", { text: "（空数组，点击下方添加行）", cls: "sqlite-manager-json-empty-hint" });
+                            syncToHidden();
+                            return;
+                        }
+
+                        // Re-collect keys
+                        allKeys = new Set();
+                        for (var k = 0; k < currentData.length; k++) {
+                            Object.keys(currentData[k]).forEach(function(key) { allKeys.add(key); });
+                        }
+                        colKeys = Array.from(allKeys);
+
+                        var table = tableContainer.createEl("table", { cls: "sqlite-manager-edit-table" });
+                        var thead = table.createEl("thead");
+                        var headerRow = thead.createEl("tr");
+                        headerRow.createEl("th", { text: "#", cls: "sqlite-manager-edit-th-num" });
+                        for (var ci = 0; ci < colKeys.length; ci++) {
+                            (function(keyIdx) {
+                                var th = headerRow.createEl("th", { cls: "sqlite-manager-edit-th-col" });
+                                var colNameSpan = th.createSpan({ text: colKeys[keyIdx] });
+                                var delColBtn = th.createEl("button", { cls: "sqlite-manager-edit-del-col", text: "×", attr: { title: "删除此列" } });
+                                delColBtn.addEventListener("click", function(e) {
+                                    e.stopPropagation();
+                                    var removedKey = colKeys[keyIdx];
+                                    for (var ri = 0; ri < currentData.length; ri++) {
+                                        delete currentData[ri][removedKey];
+                                    }
+                                    renderTable();
+                                });
+                            })(ci);
+                        }
+                        headerRow.createEl("th", { text: "", cls: "sqlite-manager-edit-th-action" });
+
+                        var tbody = table.createEl("tbody");
+                        for (var ri = 0; ri < currentData.length; ri++) {
+                            (function(rowIdx) {
+                                var tr = tbody.createEl("tr");
+                                tr.createEl("td", { text: String(rowIdx + 1), cls: "sqlite-manager-edit-td-num" });
+                                for (var ci = 0; ci < colKeys.length; ci++) {
+                                    (function(keyIdx2) {
+                                        var td = tr.createEl("td", { cls: "sqlite-manager-edit-td-cell" });
+                                        var cellInput = td.createEl("input", {
+                                            cls: "sqlite-manager-edit-cell-input",
+                                            attr: { type: "text", spellcheck: "false" }
+                                        });
+                                        var cellVal = currentData[rowIdx][colKeys[keyIdx2]];
+                                        cellInput.value = cellVal !== null && cellVal !== undefined ? String(cellVal) : "";
+                                        cellInput.addEventListener("input", function() {
+                                            currentData[rowIdx][colKeys[keyIdx2]] = cellInput.value;
+                                            syncToHidden();
+                                        });
+                                    })(ci);
+                                }
+                                var actionTd = tr.createEl("td", { cls: "sqlite-manager-edit-td-action" });
+                                var delRowBtn = actionTd.createEl("button", { cls: "sqlite-manager-edit-del-row", text: "🗑️", attr: { title: "删除此行" } });
+                                delRowBtn.addEventListener("click", function(e) {
+                                    e.stopPropagation();
+                                    currentData.splice(rowIdx, 1);
+                                    renderTable();
+                                });
+                            })(ri);
+                        }
+
+                        syncToHidden();
+                    }
+
+                    renderTable();
+
+                    // Add row / Add column buttons
+                    var tableActions = editorWrap.createDiv({ cls: "sqlite-manager-json-table-actions" });
+                    var addRowBtn = tableActions.createEl("button", { text: "➕ 添加行", cls: "mod-muted" });
+                    addRowBtn.addEventListener("click", function() {
+                        var newRow = {};
+                        for (var ki = 0; ki < colKeys.length; ki++) {
+                            newRow[colKeys[ki]] = "";
+                        }
+                        currentData.push(newRow);
+                        renderTable();
+                    });
+                    var addColBtn = tableActions.createEl("button", { text: "➕ 添加列", cls: "mod-muted" });
+                    addColBtn.addEventListener("click", function() {
+                        var newColName = "column_" + (colKeys.length + 1);
+                        // Find a unique name
+                        var attempt = 1;
+                        while (colKeys.indexOf(newColName) !== -1) {
+                            attempt++;
+                            newColName = "column_" + attempt;
+                        }
+                        for (var ri = 0; ri < currentData.length; ri++) {
+                            currentData[ri][newColName] = "";
+                        }
+                        renderTable();
+                    });
+
+                    // --- Textarea (raw JSON) ---
+                    var textarea = textContainer.createEl("textarea", {
+                        cls: "sqlite-manager-form-input json-input",
+                        attr: { placeholder: "输入JSON格式的" + colName, rows: "8", spellcheck: "false" }
+                    });
+                    textarea.value = JSON.stringify(jsonData, null, 2);
+
+                    // --- Toggle buttons ---
+                    var btnGroup = editorWrap.createDiv({ cls: "sqlite-manager-form-btn-group" });
+                    var isTableMode = true;
+                    var toggleBtn = btnGroup.createEl("button", { text: "📝 切换到原始JSON", cls: "mod-muted" });
+                    toggleBtn.addEventListener("click", function() {
+                        if (isTableMode) {
+                            // Switch to textarea mode: serialize current table data
+                            try {
+                                textarea.value = JSON.stringify(currentData, null, 2);
+                            } catch (e) {
+                                textarea.value = JSON.stringify(jsonData, null, 2);
+                            }
+                            tableContainer.style.display = "none";
+                            tableActions.style.display = "none";
+                            textContainer.style.display = "block";
+                            toggleBtn.textContent = "📊 切换到表格编辑";
+                            isTableMode = false;
+                        } else {
+                            // Switch to table mode: parse textarea content
+                            try {
+                                var parsed = JSON.parse(textarea.value);
+                                if (Array.isArray(parsed)) {
+                                    currentData = parsed.map(function(item) { return Object.assign({}, item); });
+                                    hiddenInput.value = JSON.stringify(currentData);
+                                    renderTable();
+                                } else {
+                                    new obsidian.Notice("内容不是JSON数组，无法切换到表格模式");
+                                    return;
+                                }
+                            } catch (e) {
+                                new obsidian.Notice("JSON格式不正确，无法切换到表格模式");
+                                return;
+                            }
+                            tableContainer.style.display = "block";
+                            tableActions.style.display = "flex";
+                            textContainer.style.display = "none";
+                            toggleBtn.textContent = "📝 切换到原始JSON";
+                            isTableMode = true;
+                        }
+                    });
+
+                    var formatBtn = btnGroup.createEl("button", { text: "格式化JSON", cls: "mod-muted" });
+                    formatBtn.addEventListener("click", function() {
+                        if (isTableMode) {
+                            try {
+                                var parsed = JSON.parse(hiddenInput.value);
+                                hiddenInput.value = JSON.stringify(parsed, null, 2);
+                            } catch (e) {
+                                new obsidian.Notice("JSON格式不正确");
+                            }
+                        } else {
+                            try {
+                                var parsed = JSON.parse(textarea.value);
+                                textarea.value = JSON.stringify(parsed, null, 2);
+                            } catch (e) {
+                                new obsidian.Notice("JSON格式不正确，无法格式化");
+                            }
+                        }
+                    });
+
+                    // Sync textarea to hiddenInput when in textarea mode
+                    textarea.addEventListener("input", function() {
+                        if (!isTableMode) {
+                            hiddenInput.value = textarea.value;
+                        }
+                    });
+
+                })(col.name, parsedJson);
+
+            } else if (isJsonField) {
+                // JSON but not a table-like array (e.g. object or empty array) - show textarea
                 var textarea_1 = fieldDiv.createEl("textarea", {
                     cls: "sqlite-manager-form-input json-input",
                     attr: { placeholder: "输入JSON格式的" + col.name, rows: "6", spellcheck: "false" }
