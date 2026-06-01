@@ -282,8 +282,9 @@ var EditRowModal = (function(_super) {
                         for (var ci = 0; ci < colKeys.length; ci++) {
                             (function(keyIdx) {
                                 var th = headerRow.createEl("th", { cls: "sqlite-manager-edit-th-col" });
-                                var colNameSpan = th.createSpan({ text: colKeys[keyIdx] });
-                                var delColBtn = th.createEl("button", { cls: "sqlite-manager-edit-del-col", text: "×", attr: { title: "删除此列" } });
+                                var inner = th.createDiv({ cls: "sqlite-manager-edit-th-col-inner" });
+                                var colNameSpan = inner.createSpan({ text: colKeys[keyIdx] });
+                                var delColBtn = inner.createEl("button", { cls: "sqlite-manager-edit-del-col", text: "×", attr: { title: "删除此列" } });
                                 delColBtn.addEventListener("click", function(e) {
                                     e.stopPropagation();
                                     var removedKey = colKeys[keyIdx];

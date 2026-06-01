@@ -764,16 +764,20 @@
 
 .sqlite-manager-edit-th-col {
 	position: relative;
-	display: flex;
-	align-items: center;
-	gap: 4px;
 	min-width: 80px;
 }
 
-.sqlite-manager-edit-th-col span {
+.sqlite-manager-edit-th-col-inner {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.sqlite-manager-edit-th-col-inner span {
 	flex: 1;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .sqlite-manager-edit-del-col {

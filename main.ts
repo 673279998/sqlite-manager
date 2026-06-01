@@ -338,8 +338,11 @@ class EditRowModal extends Modal {
 								const th = headerRow.createEl("th", {
 									cls: "sqlite-manager-edit-th-col",
 								});
-								th.createSpan({ text: colKeys[keyIdx] });
-								const delColBtn = th.createEl("button", {
+								const inner = th.createDiv({
+									cls: "sqlite-manager-edit-th-col-inner",
+								});
+								inner.createSpan({ text: colKeys[keyIdx] });
+								const delColBtn = inner.createEl("button", {
 									cls: "sqlite-manager-edit-del-col",
 									text: "×",
 									attr: { title: "删除此列" },
