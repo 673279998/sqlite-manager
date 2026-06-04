@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "minAppVersion": "1.0.0",
   "description": "View and manage SQLite databases with JSON field nested table display, edit, delete, and add data.",
-  "author": "673279998",
+  "author": "pikachu",
   "authorUrl": "https://github.com/673279998",
   "isDesktopOnly": true
 }
