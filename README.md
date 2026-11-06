@@ -75,6 +75,17 @@ View and manage SQLite databases directly in Obsidian, with special support for 
 3. Copy the downloaded files into that folder
 4. Enable the plugin in Obsidian Settings - Community Plugins
 
+## Changelog
+
+### v1.0.1 (2026-11-06)
+- **Fix**: Compatible with Obsidian 1.15.0 (base classes migrated to ES6 classes; plugin rebuilt with native `class` inheritance)
+- **Fix**: Removed duplicate file extension registration to avoid conflicts with other SQLite plugins (e.g. sqlite-explorer)
+- **Fix**: Inline editable JSON table for arrays of objects when editing rows; plain inputs when adding rows
+- **Fix**: Horizontal column headers in JSON table editor
+
+### v1.0.0 (2026-06-02)
+- Initial release
+
 ## License
 
 MIT License

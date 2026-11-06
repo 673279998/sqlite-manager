@@ -1,7 +1,7 @@
 {
   "id": "sqlite-manager",
   "name": "SQLite Manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minAppVersion": "1.0.0",
   "description": "View and manage SQLite databases with JSON field nested table display, edit, delete, and add data.",
   "author": "673279998",
